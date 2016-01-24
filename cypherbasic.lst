@@ -1,0 +1,1755 @@
+ca65 V2.11.0 - (C) Copyright 1998-2005 Ullrich von Bassewitz
+Main file   : cypherbasic.s
+Current file: cypherbasic.s
+
+000000r 1               ;cypherbasic 64
+000000r 1               ;
+000000r 1               ;load"cypherbasic",8,1:new:sys9*4096
+000000r 1               ;compile: ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib
+000000r 1               ;with cc65 compiler/assembler package
+000000r 1               ;
+000000r 1               ;© 2007 Hanno Behrens (pebbles@schattenlauf.de)
+000000r 1               ;for http://www.forum64.de/wbb2/thread.php?postid=188445#post188445
+000000r 1               	.setcpu "6502X"
+000000r 1               	.macpack generic
+000000r 1               	.macpack cbm
+000000r 1               	.import SETLFS,SETNAM,OPEN,CLOSE,GET
+000000r 1               	.import BASIN,BSOUT,CHKIN,CKOUT,CLRCH,READST
+000000r 1               
+000000r 1               	.segment "STARTUP"
+000000r 1               
+000000r 1               	.define VERSION "v0.8"
+000000r 1               	SCREEN=$0400
+000000r 1               	ST=$90
+000000r 1               	k_scrout=$e716
+000000r 1               	pointer=$fb		;+fc
+000000r 1               	uintout=$bdcd		;Basic Positive Integerzahl ausgeben (a/x)
+000000r 1               	K_CHKSTOP=$ffe1		;$f6ed Stop-Taste abfragen eq->stop
+000000r 1               	basic_nmi_vec	= $a002			;Basic NMI-Vector
+000000r 1               
+000000r 1               	; Direct entries
+000000r 1               CLRSCR 		:= $E544
+000000r 1               KBDREAD		:= $E5B4
+000000r 1               NMIEXIT		:= $FEBC
+000000r 1               
+000000r 1               ; ---------------------------------------------------------------------------
+000000r 1               ; Processor Port at $01
+000000r 1               PP		= $01
+000000r 1               
+000000r 1               LORAM		= $01  		; Enable the basic rom
+000000r 1               HIRAM		= $02  		; Enable the kernal rom
+000000r 1               IOEN 		= $04  		; Enable I/O
+000000r 1               CASSTOK_DATA	= $08  		; Cassette data
+000000r 1               CASSPLAY	= $10  		; Cassette: Play
+000000r 1               CASSMOT		= $20  		; Cassette motor on
+000000r 1               TP_FAST		= $80  		; Switch Rossmoeller TurboProcess to fast mode
+000000r 1               
+000000r 1               RAMONLY		= $F8  		; (~(LORAM | HIRAM | IOEN)) & $FF
+000000r 1               
+000000r 1               ; BASIC Erweiterungen
+000000r 1               NMIVEK		=$300
+000000r 1               TOKENVEK	=$304
+000000r 1               LISTVEK		=$306
+000000r 1               CMDVEK		=$308
+000000r 1               FUNVEK		=$30a
+000000r 1               PRINTVEK	=$326
+000000r 1               
+000000r 1               PRINTORG	=$f1ca
+000000r 1               Z_ACTIVEDEV	=$13
+000000r 1               ADR		=$22
+000000r 1               ;STRPTR		=$33		;33/34 Zeiger auf Anfang des Strings
+000000r 1               FAC1		=$61
+000000r 1               FAC2		=$69
+000000r 1               FAC3		=$57
+000000r 1               FAC4		=$5c
+000000r 1               RESSTRPTR	=$33		;nach B_GETSTR
+000000r 1               NEWSTRLEN	=$61		;FAC#1,System
+000000r 1               NEWSTRPTR	=$62
+000000r 1               ARG1STRLEN	=FAC2		;FAC#2, Eigenbenutzung
+000000r 1               ARG1STRPTR	=FAC2+1
+000000r 1               ARG2STRLEN	=FAC3		;FAC#3, Eigenbenutzung
+000000r 1               ARG2STRPTR	=FAC3+1
+000000r 1               TMPSTRLEN	=$5c		;FAC#4,Eigenbenutzung
+000000r 1               TMPSTRPTR	=$5d
+000000r 1               LINENO		=$39
+000000r 1               CHRGET		=$73
+000000r 1               CHRGOT		=$79
+000000r 1               TXTPTR		=CHRGOT+1
+000000r 1               Z_SA		=$b9
+000000r 1               Z_FA		=$ba
+000000r 1               Z_FNADR		=$bb
+000000r 1               Z_FNLEN		=$b7
+000000r 1               TMPPTR		=$fb
+000000r 1               STACK		=$100
+000000r 1               PRERROR		=$a445		;Fehlerausgabe
+000000r 1               WARMSTART	=$e386
+000000r 1               
+000000r 1               ; BASIC Tokens
+000000r 1               TOK_DATA	=$83
+000000r 1               TOK_INPUT	=$85
+000000r 1               TOK_LET		=$88
+000000r 1               TOK_REM		=$8f
+000000r 1               TOK_PRINT	=$99
+000000r 1               TOK_TO		=$a4
+000000r 1               ; Konstanten
+000000r 1               CHAR		=8
+000000r 1               COUNT		=11
+000000r 1               TYPFLAG		=$0d		;0=Numerisch -1=String
+000000r 1               QUOTFLG		=15
+000000r 1               QUOTE		='"'
+000000r 1               FLAG		=$0f		;hochkomma-Flag
+000000r 1               BUFFER		=$200
+000000r 1               
+000000r 1               ;ICE Befehle
+000000r 1               K_SENDNAM	=$f3d5
+000000r 1               K_TALK		=$ffb4
+000000r 1               K_SECTALK	=$ff96
+000000r 1               K_IECIN		=$ffa5
+000000r 1               K_CLSFIL	=$f642
+000000r 1               STATUS		=$90
+000000r 1               
+000000r 1               TABLE		=$a09e		;Tabelle der Befehlsworte
+000000r 1               
+000000r 1               B_TESTSTACK	=$a3fb		;test Platz auf Stack
+000000r 1               B_TESTNUM	=$ad8d		;Testet das Ergebnis auf NUM (Ende einer Func)
+000000r 1               B_TESTSTR	=$ad8f		;Testet das Ergebnis auf STR (Ende einer Func)
+000000r 1               B_FRMNUM	=$ad8a		;numerischen Ausdruck holen
+000000r 1               B_INTER		=$a7ae		;Interpreterschleife
+000000r 1               B_SYNTAX	=$af08		;Syntaxerror
+000000r 1               B_NEXTSTAT	=$a906		;nächstes Statement suchen
+000000r 1               
+000000r 1               K_MEMTOP		=$fe25		;clc->setzen sec->holen x/y
+000000r 1               
+000000r 1               B_LNPRT		=$bdcd		;Basic Positive Integerzahl ausgeben (a/x)
+000000r 1               ;Meldungen ausgeben
+000000r 1               K_SYSMSG		=$e422		;systemmeldung ausgeben
+000000r 1               B_OVERFLOW	=$b97e
+000000r 1               ERROR		=$a445
+000000r 1               B_ERRORMSG	=$a43a		;Fehlermeldung in X 1..30
+000000r 1               
+000000r 1               B_NMISTART	=$e37b
+000000r 1               B_NMIORGVEK	=$e38b
+000000r 1               
+000000r 1               ;Basic Zeilen einlesen-Spezifisch
+000000r 1               B_INDELLINE	=$a49c		;Löschen oder einfügen von Programmzeilen
+000000r 1               B_ZNRADR	=$a96b		;Zeilennummer in Adressformat umwandeln $14/$15
+000000r 1               B_TOKENLINE	=$a579		;Basic-Zeile in Interpretercode wandeln
+000000r 1               B_FINDLINE	=$a613		;Adresse der Basiczeile berechnen
+000000r 1               B_BINDLINES	=$a533
+000000r 1               B_CLR		=$a659
+000000r 1               B_MOVBLOCK	=$a3b8		;Block-Verschiebe-Routine
+000000r 1               
+000000r 1               B_OUTBYTE	=$a6f3
+000000r 1               B_OLDLIST	=$a6ef
+000000r 1               B_LISTTOK	=$a724
+000000r 1               B_EXECOLD	=$a7ed
+000000r 1               B_END		=$a831
+000000r 1               B_PRINT		=$aaa0
+000000r 1               B_FRMEVL	=$ad9e		;holt beliebigen Term
+000000r 1               B_HOLEAUSDRUCK	=$ae83		;z.B. STRING danach mit $ad8f prüfen
+000000r 1               B_FUNKTOLD	=$ae8d
+000000r 1               B_GETTERM	=$aef1		;holt einen gesamten Term in Klammern
+000000r 1               B_CHKCLOSE	=$aef7		;Testet auf )
+000000r 1               B_CHKOPEN	=$aefa		;Testet auf (
+000000r 1               B_CHKKOMMA	=$aefd		;Testet auf Komma
+000000r 1               B_CHKCHAR	=$aeff		;Testet auf Zeichen im A
+000000r 1               B_CHKNUM	=$ad8d
+000000r 1               B_CHKSTR	=$ad8f		;prüft ob der letzte geholte Ausdruck ($ae83) ein STR war
+000000r 1               B_STROUT		=$ab1e		;A lo/Y hi pointer
+000000r 1               B_CHAROUT		=$ab47
+000000r 1               B_GETADR	=$b7f7		;nach $14/$15 Y=lo A=hi
+000000r 1               
+000000r 1               B_ISCHAR	=$b113		;in A, Result C=1 wenn wahr (a..z)
+000000r 1               
+000000r 1               B_BYTE2FLOAT	=$b3a2
+000000r 1               B_MKSTR		=$b47d		;len in A, x/y bzw. $62/$63 Adresse, Akku/$61 Länge
+000000r 1               
+000000r 1               B_RETSTR	=$b4ca		;aus $61/$62/$63 wird der String richtig fertig gemacht
+000000r 1               B_RETBYTEY	=$b3a2		; Yreg zurückgeben
+000000r 1               B_RETBYTEA	=$bc3c		; Akku zurückgeben (Nebeneffekte??)
+000000r 1               B_RETWORD	=$b391		; Y/Akku zurückgeben
+000000r 1               B_RETSTRTMP	=$b487		; Pointer A/Y als temporärern String zurückgeben. Nullbyte oder " ist Ende!
+000000r 1               
+000000r 1               B_FRESTR	=$b6a3		;Rückgabe: Y/X hi/lo A=len
+000000r 1               				;auch $b6aa? - B_FRMEVL Rückgabe aufbereiten ($22/$23??)$35/36 A=Len
+000000r 1               
+000000r 1               B_GETSTRBYTE	=$b761		;numarg->A, strdesc->$50/$51
+000000r 1               B_GETSTR	=$b782		;Obersten Stringdescripter -> $33/$34 Länge ->A+Y
+000000r 1               B_GETSTR_NOCHK  =B_GETSTR+3	;wie oben ohne Stringcheck
+000000r 1               B_GETBYTE	=$b79e		;???
+000000r 1               
+000000r 1               B_GETKOMMABYTE	=$e200		; Byte ins XReg
+000000r 1               B_GETBYTEX	=$e203		; Byte ins XReg
+000000r 1               B_GETWORDKOMMABYTE=$b7eb	; Word nach $14/$15, Komma, Byte nach X holen (wie Poke)
+000000r 1               B_GETNUM	=$ad8a		; Irgendwas numerisches in den FAC (siehe oben B_TESTNUM)
+000000r 1               
+000000r 1               K_DIRECTMODE	=$ff90
+000000r 1               ;Rechnen
+000000r 1               B_ADDZIFFER	=$bd7e		; addiert Ziffer zu FAC
+000000r 1               
+000000r 1               K_FINDFN	=$f30f
+000000r 1               
+000000r 1               JUMP		=$54		;JUMP Vector
+000000r 1               
+000000r 1               SEARCHBYTE	=$07
+000000r 1               Z_ACTIVEFN	=$13
+000000r 1               GENPTR		=$14		;CBM Generic Pointer, Integer-Adrese, z.B. Zeilennummer
+000000r 1               STARTBASIC	=$2b
+000000r 1               STARTVAR	=$2d
+000000r 1               STARTARR	=$2f
+000000r 1               ENDARR		=$31
+000000r 1               STARTSTR	=$33
+000000r 1               BASICEND	=$37
+000000r 1               
+000000r 1               STRDESC		=$50		;..$53
+000000r 1               
+000000r 1               .macro  basicstart nr
+000000r 1               
+000000r 1               ;Basic Start
+000000r 1               		.word *
+000000r 1               		.org *-2
+000000r 1               		.word :+
+000000r 1               		.ifnblank nr
+000000r 1               		   .word nr		; Zeilennummer
+000000r 1               		.else
+000000r 1               		   .word 0
+000000r 1               		.endif
+000000r 1               		.byte $9e		; SYS
+000000r 1               		.asciiz .sprintf ("%d", *+7)
+000000r 1               :		.word 0
+000000r 1               .endmacro
+000000r 1               
+000000r 1               ;		basicstart 2007
+000000r 1               		.org $9000
+009000  1  00 90        		.word *
+009002  1               		.org *-2
+009000  1               
+009000  1  A2 00        init:		ldx #<init
+009002  1  A0 90        		ldy #>init
+009004  1  18           		clc
+009005  1  20 25 FE     		jsr K_MEMTOP		;memtop setzen
+009008  1  86 37        		stx BASICEND
+00900A  1  84 38        		sty BASICEND+1
+00900C  1  86 33        		stx STARTSTR
+00900E  1  84 34        		sty STARTSTR+1
+009010  1  A9 2E        		lda #<gettoken
+009012  1  A0 91        		ldy #>gettoken
+009014  1  8D 04 03     		sta TOKENVEK
+009017  1  8C 05 03     		sty TOKENVEK+1
+00901A  1  A9 52        		lda #<listtoken
+00901C  1  A0 92        		ldy #>listtoken
+00901E  1  8D 06 03     		sta LISTVEK
+009021  1  8C 07 03     		sty LISTVEK+1
+009024  1  A9 F1        		lda #<newcmd
+009026  1  A0 91        		ldy #>newcmd
+009028  1  8D 08 03     		sta CMDVEK
+00902B  1  8C 09 03     		sty CMDVEK+1
+00902E  1  A9 15        		lda #<newfun
+009030  1  A0 92        		ldy #>newfun
+009032  1  8D 0A 03     		sta FUNVEK
+009035  1  8C 0B 03     		sty FUNVEK+1
+009038  1               			;NMI Handling deaktiv
+009038  1               			;lda #<nmi
+009038  1               			;ldy #>nmi
+009038  1               			;sta NMIVEK
+009038  1               			;sty NMIVEK+1
+009038  1               			;jmp B_NMISTART
+009038  1               
+009038  1  A2 00        		ldx #0
+00903A  1  20 3E 90     		jsr msgout
+00903D  1               		;jsr B_CLR
+00903D  1  60           		rts
+00903E  1               
+00903E  1               ;.proc nmi	;NMI-Einsprung
+00903E  1               ;		jmp B_NMIORGVEK
+00903E  1               ;.endproc
+00903E  1               
+00903E  1               .proc msgout	;Fehlermeldung in X
+00903E  1  8A           		txa
+00903F  1  0A           		asl
+009040  1  AA           		tax
+009041  1  BD 74 90     		lda msg,x
+009044  1  BC 75 90     		ldy msg+1,x
+009047  1  20 1E AB     		jsr B_STROUT
+00904A  1  60           		rts
+00904B  1               
+00904B  1  0D 43 59 50  version:	.byte 13,"cypherbasic 64 ",VERSION,13
+00904F  1  48 45 52 42  
+009053  1  41 53 49 43  
+009060  1  28 43 29 20  		.asciiz "(c) 2007 h. behrens"
+009064  1  32 30 30 37  
+009068  1  20 48 2E 20  
+009074  1  4B 90        msg:		.word version
+009076  1               .endproc
+009076  1               
+009076  1               .proc errormsg
+009076  1  8A           		txa
+009077  1  0A           		asl
+009078  1  AA           		tax
+009079  1  BD 84 90     		lda err,x
+00907C  1  85 22        		sta ADR
+00907E  1  BD 85 90     		lda err+1,x
+009081  1  4C 45 A4     		jmp ERROR
+009084  1  92 90 A9 90  err:		.word erstrlen,ernotfound,notimplemented,rotate
+009088  1  C5 90 D8 90  
+00908C  1  FA 90 0C 91  		.word whilewend,repeatuntil,toomanylines
+009090  1  20 91        
+009092  1  44 49 46 46  erstrlen:	.byte "different string lengtH"			;0
+009096  1  45 52 45 4E  
+00909A  1  54 20 53 54  
+0090A9  1  54 52 41 4E  ernotfound:	.byte "transposition char not founD"		;1
+0090AD  1  53 50 4F 53  
+0090B1  1  49 54 49 4F  
+0090C5  1  4E 4F 54 20  notimplemented:	.byte "not yet implementeD"			;2
+0090C9  1  59 45 54 20  
+0090CD  1  49 4D 50 4C  
+0090D8  1  52 4F 54 41  rotate:		.byte "rotate not less than string lengtH"	;3
+0090DC  1  54 45 20 4E  
+0090E0  1  4F 54 20 4C  
+0090FA  1  57 48 49 4C  whilewend:	.byte "while without wenD"			;4
+0090FE  1  45 20 57 49  
+009102  1  54 48 4F 55  
+00910C  1  55 4E 54 49  repeatuntil:	.byte "until without repeaT"			;5
+009110  1  4C 20 57 49  
+009114  1  54 48 4F 55  
+009120  1  54 4F 4F 20  toomanylines:	.byte "too many lineS"				;6
+009124  1  4D 41 4E 59  
+009128  1  20 4C 49 4E  
+00912E  1               .endproc
+00912E  1               
+00912E  1               .proc gettoken
+00912E  1               PNT		=$71
+00912E  1               
+00912E  1  A6 7A        		ldx TXTPTR
+009130  1  A0 04        		ldy #4
+009132  1  84 0F        		sty FLAG
+009134  1  BD 00 02     nextchar:	lda BUFFER,x
+009137  1  10 07        		bpl normal
+009139  1  C9 FF        		cmp #$ff
+00913B  1  F0 3E        		beq takchar
+00913D  1  E8           		inx
+00913E  1  D0 F4        		bne nextchar
+009140  1  C9 20        normal:		cmp #' '
+009142  1  F0 37        		beq takchar
+009144  1  85 08        		sta CHAR
+009146  1  C9 22        		cmp #QUOTE
+009148  1  F0 55        		beq getchar
+00914A  1  24 0F        		bit FLAG
+00914C  1  70 2D        		bvs takchar
+00914E  1  C9 3F        		cmp #'?'
+009150  1  D0 04        		bne :+
+009152  1  A9 99        		lda #TOK_PRINT
+009154  1  D0 25        		bne takchar
+009156  1  C9 30        :		cmp #'0'
+009158  1  90 04        		bcc :+
+00915A  1  C9 3C        		cmp #'<'
+00915C  1  90 1D        		bcc takchar
+00915E  1  84 71        :		sty PNT
+009160  1  A0 00        		ldy #0
+009162  1  84 0B        		sty COUNT
+009164  1  88           		dey
+009165  1  86 7A        		stx TXTPTR
+009167  1  CA           		dex
+009168  1               
+009168  1  C8           cmploop:	iny
+009169  1  E8           		inx
+00916A  1  BD 00 02     testnext:	lda BUFFER,x
+00916D  1  38 F9 9E A0  		sub TABLE,y
+009171  1  F0 F5        		beq cmploop
+009173  1  C9 80        		cmp #$80
+009175  1  D0 2F        		bne nextcmd
+009177  1  05 0B        		ora COUNT
+009179  1  A4 71        takchar1:	ldy PNT
+00917B  1               
+00917B  1  E8           takchar:	inx
+00917C  1  C8           		iny
+00917D  1  99 FB 01     		sta BUFFER-5,y
+009180  1               ;		lda BUFFER-5,y			;void
+009180  1  C9 00        		cmp #0
+009182  1  F0 38        		beq ende
+009184  1  38 E9 3A     		sub #':'
+009187  1  F0 04        		beq :+
+009189  1  C9 49        		cmp #TOK_DATA-':'
+00918B  1  D0 02        		bne :++
+00918D  1  85 0F        :		sta FLAG
+00918F  1  38 E9 55     :		sub #TOK_REM-':'
+009192  1  D0 A0        		bne nextchar
+009194  1  85 08        		sta CHAR
+009196  1  BD 00 02     remloop:	lda BUFFER,x
+009199  1  F0 E0        		beq takchar
+00919B  1  C5 08        		cmp CHAR
+00919D  1  F0 DC        		beq takchar
+00919F  1  C8           getchar:	iny
+0091A0  1  99 FB 01     		sta BUFFER-5,y
+0091A3  1  E8           		inx
+0091A4  1  D0 F0        		bne remloop
+0091A6  1               
+0091A6  1  A6 7A        nextcmd:	ldx TXTPTR
+0091A8  1  E6 0B        		inc COUNT
+0091AA  1  C8           weiter:		iny
+0091AB  1  B9 9D A0     		lda TABLE-1,y
+0091AE  1  10 FA        		bpl weiter
+0091B0  1  B9 9E A0     		lda TABLE,y
+0091B3  1  D0 B5        		bne testnext
+0091B5  1  F0 0F        		beq newtok
+0091B7  1               
+0091B7  1  BD 00 02     notfound:	lda BUFFER,x
+0091BA  1  10 BD        		bpl takchar1
+0091BC  1               
+0091BC  1  99 FD 01     ende: 		sta BUFFER-3,y
+0091BF  1               
+0091BF  1  C6 7B        		dec TXTPTR+1
+0091C1  1  A9 FF        		lda #$ff
+0091C3  1  85 7A        		sta TXTPTR
+0091C5  1  60           		rts
+0091C6  1               
+0091C6  1               ;neue Befehle verarbeiten
+0091C6  1  A0 00        newtok:		ldy #0
+0091C8  1  B9 FF 99     		lda newtab,y
+0091CB  1  D0 02        		bne newtest
+0091CD  1               
+0091CD  1  C8           newcmp:		iny
+0091CE  1  E8           		inx
+0091CF  1  BD 00 02     newtest:	lda BUFFER,x
+0091D2  1  38 F9 FF 99  		sub newtab,y
+0091D6  1  F0 F5        		beq newcmp
+0091D8  1  C9 80        		cmp #$80
+0091DA  1  D0 04        		bne nextnew
+0091DC  1  05 0B        		ora COUNT
+0091DE  1  D0 99        		bne takchar1
+0091E0  1               
+0091E0  1  A6 7A        nextnew:	ldx TXTPTR
+0091E2  1  E6 0B        		inc COUNT
+0091E4  1  C8           weiter1:	iny
+0091E5  1  B9 FE 99     		lda newtab-1,y
+0091E8  1  10 FA        		bpl weiter1
+0091EA  1  B9 FF 99     		lda newtab,y
+0091ED  1  D0 E0        		bne newtest
+0091EF  1  F0 C6        		beq notfound
+0091F1  1               .endproc
+0091F1  1               
+0091F1  1               
+0091F1  1               .proc newcmd
+0091F1  1  20 73 00     		jsr CHRGET
+0091F4  1               		;cmp #TOK_PRINT
+0091F4  1               		;beq printext
+0091F4  1  C9 CC        		cmp #CMDSTART
+0091F6  1  90 04        		bcc oldcmd
+0091F8  1  C9 E1        		cmp #CMDEND+1
+0091FA  1  90 09        		bcc oknew
+0091FC  1  20 79 00     oldcmd:		jsr CHRGOT
+0091FF  1  20 ED A7     		jsr B_EXECOLD
+009202  1  4C AE A7     		jmp B_INTER
+009205  1               
+009205  1  38 E9 CC     oknew:		sub #CMDSTART
+009208  1  0A           		asl
+009209  1  AA           		tax
+00920A  1  BD CE 99     		lda cmdtab+1,x
+00920D  1  48           		pha
+00920E  1  BD CD 99     		lda cmdtab,x
+009211  1  48           		pha
+009212  1  4C 73 00     		jmp CHRGET
+009215  1               
+009215  1               ;Erweiterung BLOCK für print
+009215  1               ;printext:	jsr CHRGET
+009215  1               ;		cmp #TOK_BLOCK
+009215  1               ;		beq blockprint
+009215  1               ;		bne exit
+009215  1               ;blockprint:	lda #'a'
+009215  1               ;		jsr BSOUT
+009215  1               ;		jsr CHRGET
+009215  1               ;exit:		jsr B_PRINT
+009215  1               ;		jmp B_INTER
+009215  1               .endproc
+009215  1               
+009215  1               .proc newfun
+009215  1  A9 00        		lda #0
+009217  1  85 0D        		sta TYPFLAG
+009219  1  20 73 00     		jsr CHRGET
+00921C  1  C9 24        		cmp #'$'		;Hexzahlen auswerten
+00921E  1  F0 12        		beq hexzahl
+009220  1  C9 25        		cmp #'%'
+009222  1  F0 11        		beq binzahl
+009224  1               
+009224  1  C9 E1        		cmp #FUNSTART
+009226  1  90 04        		bcc oldfun
+009228  1  C9 FF        		cmp #FUNEND+1
+00922A  1  90 0C        		bcc oknew
+00922C  1  20 79 00     oldfun:		jsr CHRGOT
+00922F  1  4C 8D AE     		jmp B_FUNKTOLD
+009232  1               
+009232  1               ;Erweiterungen
+009232  1  4C A4 96     hexzahl:	jmp gethex
+009235  1  4C D4 96     binzahl:	jmp getbin
+009238  1               ;Erweiterte Token-Funktionen
+009238  1  38 E9 E1     oknew:		sub #FUNSTART
+00923B  1  0A           		asl
+00923C  1  48           		pha
+00923D  1  20 73 00     		jsr CHRGET
+009240  1  20 FA AE     		jsr B_CHKOPEN		;Offene Klammer holen
+009243  1  68           		pla
+009244  1  A8           		tay
+009245  1  B9 F7 99     		lda funtab,y
+009248  1  85 55        		sta JUMP+1
+00924A  1  B9 F8 99     		lda funtab+1,y
+00924D  1  85 56        		sta JUMP+2
+00924F  1  4C 54 00     		jmp JUMP
+009252  1               		;rts
+009252  1               .endproc
+009252  1               
+009252  1               
+009252  1               .proc listtoken
+009252  1               PNT		=$49
+009252  1  10 0F        		bpl out
+009254  1  24 0F        		bit QUOTFLG
+009256  1  30 0B        		bmi out
+009258  1  C9 FF        		cmp #$ff
+00925A  1  F0 07        		beq out
+00925C  1  C9 CC        		cmp #$cc
+00925E  1  B0 06        		bcs newlist
+009260  1  4C 24 A7     		jmp B_LISTTOK
+009263  1  4C F3 A6     out:		jmp B_OUTBYTE
+009266  1               
+009266  1  38 E9 CB     newlist:	sub #$cb		;offset abziehen
+009269  1  AA           		tax
+00926A  1  84 49        		sty PNT
+00926C  1  A0 FF        		ldy #-1
+00926E  1  CA           next:		dex
+00926F  1  F0 08        		beq found
+009271  1  C8           loop:		iny
+009272  1  B9 FF 99     		lda newtab,y
+009275  1  10 FA        		bpl loop
+009277  1  30 F5        		bmi next
+009279  1               
+009279  1  C8           found:		iny
+00927A  1  B9 FF 99     		lda newtab,y
+00927D  1  30 05        		bmi oldend
+00927F  1  20 47 AB     		jsr B_CHAROUT
+009282  1  D0 F5        		bne found
+009284  1               
+009284  1  4C EF A6     oldend:		jmp B_OLDLIST
+009287  1               .endproc
+009287  1               
+009287  1               ;**************** UTILITIES ************************
+009287  1               .proc clrfac	;Fließkommabereich löschen
+009287  1  A9 00        		lda #0
+009289  1  A2 0A        		ldx #10
+00928B  1  95 5C        loop:		sta FAC4,x
+00928D  1  CA           		dex
+00928E  1  10 FB        		bpl loop
+009290  1  60           		rts
+009291  1               .endproc
+009291  1               
+009291  1               .proc	hexout
+009291  1  48           		pha		;Accu und X retten
+009292  1  8A           		txa
+009293  1  48           		pha
+009294  1  BA           		tsx
+009295  1  BD 02 01     		lda STACK+2,x
+009298  1  4A           		lsr a
+009299  1  4A           		lsr a
+00929A  1  4A           		lsr a
+00929B  1  4A           		lsr a
+00929C  1  AA           		tax
+00929D  1  BD B4 92     		lda hexnum,x
+0092A0  1  20 rr rr     		jsr BSOUT
+0092A3  1  BA           		tsx
+0092A4  1  BD 02 01     		lda STACK+2,x
+0092A7  1  29 0F        		and #$0f
+0092A9  1  AA           		tax
+0092AA  1  BD B4 92     		lda hexnum,x
+0092AD  1  20 rr rr     		jsr BSOUT
+0092B0  1  68           		pla		;Accu und X wiederherstellen
+0092B1  1  AA           		tax
+0092B2  1  68           		pla
+0092B3  1  60           		rts
+0092B4  1  30 31 32 33  hexnum:		.byte "0123456789abcdef"
+0092B8  1  34 35 36 37  
+0092BC  1  38 39 41 42  
+0092C4  1               .endproc
+0092C4  1               
+0092C4  1               
+0092C4  1               ;**************** BEFEHLE **************************
+0092C4  1               
+0092C4  1               .proc repeat
+0092C4  1  A9 03        		lda #3
+0092C6  1  20 FB A3     		jsr B_TESTSTACK
+0092C9  1  20 06 A9     		jsr B_NEXTSTAT
+0092CC  1  98           		tya
+0092CD  1  18 65 7A     		add TXTPTR
+0092D0  1  48           		pha
+0092D1  1  A5 7B        		lda TXTPTR+1
+0092D3  1  69 00        		adc #0
+0092D5  1  48           		pha
+0092D6  1  A5 39        		lda LINENO
+0092D8  1  48           		pha
+0092D9  1  A5 3A        		LDA LINENO+1
+0092DB  1  48           		pha
+0092DC  1  A9 52        		lda #'r'
+0092DE  1  48           		pha
+0092DF  1  4C AE A7     		jmp B_INTER
+0092E2  1               .endproc
+0092E2  1               
+0092E2  1               .proc until
+0092E2  1  D0 03        		bne noerr
+0092E4  1  4C 08 AF     		jmp B_SYNTAX
+0092E7  1  20 8A AD     noerr:		jsr B_FRMNUM
+0092EA  1  A8           		tay
+0092EB  1  BA           		tsx
+0092EC  1  BD 01 01     		lda STACK+1,x
+0092EF  1  C9 52        		cmp #'r'
+0092F1  1  D0 21        		bne rpterr
+0092F3  1  98           		tya
+0092F4  1  D0 17        		bne rptende
+0092F6  1               
+0092F6  1  BD 02 01     		lda STACK+2,x
+0092F9  1  85 3A        		sta LINENO+1
+0092FB  1  BD 03 01     		lda STACK+3,x
+0092FE  1  85 39        		sta LINENO
+009300  1  BD 04 01     		lda STACK+4,x
+009303  1  85 7B        		sta TXTPTR+1
+009305  1  BD 05 01     		lda STACK+5,x
+009308  1  85 7A        		sta TXTPTR
+00930A  1  4C AE A7     		jmp B_INTER
+00930D  1               
+00930D  1  8A           rptende:	txa
+00930E  1  CB FB        		axs #-5		;add #5; tax
+009310  1  9A           		txs
+009311  1  4C AE A7     		jmp B_INTER
+009314  1               
+009314  1  A2 05        rpterr:		ldx #5
+009316  1  4C 76 90     		jmp errormsg
+009319  1               .endproc
+009319  1               
+009319  1               .proc do
+009319  1  A9 03        		lda #3
+00931B  1  20 FB A3     		jsr B_TESTSTACK
+00931E  1  20 06 A9     		jsr B_NEXTSTAT
+009321  1  98           		tya
+009322  1  18 65 7A     		add TXTPTR
+009325  1  48           		pha
+009326  1  A5 7B        		lda TXTPTR+1
+009328  1  69 00        		adc #0
+00932A  1  48           		pha
+00932B  1  A5 39        		lda LINENO
+00932D  1  48           		pha
+00932E  1  A5 3A        		LDA LINENO+1
+009330  1  48           		pha
+009331  1  A9 57        		lda #'w'
+009333  1  48           		pha
+009334  1  4C AE A7     		jmp B_INTER
+009337  1               .endproc
+009337  1               
+009337  1               .proc while
+009337  1  D0 03        		bne noerr
+009339  1  4C 08 AF     		jmp B_SYNTAX
+00933C  1  20 8A AD     noerr:		jsr B_FRMNUM
+00933F  1  A8           		tay
+009340  1  BA           		tsx
+009341  1  BD 01 01     		lda STACK+1,x
+009344  1  C9 57        		cmp #'w'
+009346  1  D0 21        		bne rpterr
+009348  1  98           		tya
+009349  1  F0 17        		beq rptende
+00934B  1               
+00934B  1  BD 02 01     		lda STACK+2,x
+00934E  1  85 3A        		sta LINENO+1
+009350  1  BD 03 01     		lda STACK+3,x
+009353  1  85 39        		sta LINENO
+009355  1  BD 04 01     		lda STACK+4,x
+009358  1  85 7B        		sta TXTPTR+1
+00935A  1  BD 05 01     		lda STACK+5,x
+00935D  1  85 7A        		sta TXTPTR
+00935F  1  4C AE A7     		jmp B_INTER
+009362  1               
+009362  1  8A           rptende:	txa
+009363  1  CB FB        		axs #-5		;add #5; tax
+009365  1  9A           		txs
+009366  1  4C AE A7     		jmp B_INTER
+009369  1               
+009369  1  A2 04        rpterr:		ldx #4
+00936B  1  4C 76 90     		jmp errormsg
+00936E  1               .endproc
+00936E  1               
+00936E  1               
+00936E  1               ;******* Beginn der Cypher-Programme ********
+00936E  1               .proc cypher
+00936E  1               		;Stringvariable holen
+00936E  1  20 9E AD     		jsr B_FRMEVL		; String auf Descriptorstack $61,62,63
+009371  1  20 8F AD     		jsr B_CHKSTR		;Ausdruck auch ein String?
+009374  1  20 A3 B6     		jsr B_FRESTR		;hi y, lo x, len a
+009377  1  48           		pha			;len
+009378  1  98           		tya
+009379  1  48           		pha			;hi adr
+00937A  1  8A           		txa
+00937B  1  48           		pha			;lo adr
+00937C  1               
+00937C  1  20 79 00     		jsr CHRGOT
+00937F  1               		;cmp #TOK_SUBST
+00937F  1               		;bne :+
+00937F  1               		;beq subst_para
+00937F  1               		;Ende der Syntax -> Syntax Error
+00937F  1  A2 0B        		ldx #11			;Syntax Error
+009381  1  4C 3A A4     		jmp B_ERRORMSG
+009384  1               
+009384  1               .endproc
+009384  1               
+009384  1               
+009384  1               
+009384  1               ;******* Ende der Cypher-Programme **********
+009384  1               .proc block
+009384  1  20 9E B7     		jsr B_GETBYTE		;a=chrgot(+flags) x=result ($65)
+009387  1  D0 26        		bne parameter
+009389  1  E0 00        weiter:		cpx #0
+00938B  1  F0 32        		beq off
+00938D  1  8E D9 93     		stx charmax
+009390  1  78           		sei
+009391  1  A9 E6        		lda #<blockprint
+009393  1  A0 93        		ldy #>blockprint
+009395  1  8D 26 03     		sta PRINTVEK
+009398  1  8C 27 03     		sty PRINTVEK+1
+00939B  1  A9 00        		lda #0
+00939D  1  A6 13        		ldx Z_ACTIVEFN
+00939F  1  E8           		inx
+0093A0  1  CA           :		dex
+0093A1  1  30 08        		bmi :+
+0093A3  1  9D CE 93     		sta charnum,x
+0093A6  1  9D DA 93     		sta blocknum,x
+0093A9  1  10 F5        		bpl :-
+0093AB  1  58           :		cli
+0093AC  1  4C AE A7     exit:		jmp B_INTER
+0093AF  1               
+0093AF  1  8A           parameter:	txa
+0093B0  1  48           		pha
+0093B1  1  20 FD AE     		jsr B_CHKKOMMA
+0093B4  1  20 9E B7     		jsr B_GETBYTE
+0093B7  1  8E E5 93     		stx blockmax
+0093BA  1  68           		pla
+0093BB  1  AA           		tax
+0093BC  1  4C 89 93     		jmp weiter
+0093BF  1               
+0093BF  1  78           off:		sei
+0093C0  1  A9 CA        		lda #<PRINTORG
+0093C2  1  A0 F1        		ldy #>PRINTORG
+0093C4  1  8D 26 03     		sta PRINTVEK
+0093C7  1  8C 27 03     		sty PRINTVEK+1
+0093CA  1  58           		cli
+0093CB  1  D0 DF        		bne exit
+0093CD  1               .endproc
+0093CD  1               
+0093CD  1  00           fnindex:	.byte 0
+0093CE  1  00 00 00 00  charnum:	.res 11,0
+0093D2  1  00 00 00 00  
+0093D6  1  00 00 00     
+0093D9  1  05           charmax:	.byte 5
+0093DA  1  00 00 00 00  blocknum:	.res 11,0
+0093DE  1  00 00 00 00  
+0093E2  1  00 00 00     
+0093E5  1  05           blockmax:	.byte 5
+0093E6  1               ; BSOUT Erweiterung auf 5er-Prints
+0093E6  1               .proc blockprint
+0093E6  1  48           		pha
+0093E7  1  29 7F        		and #$7f
+0093E9  1  C9 20        		cmp #' '
+0093EB  1  90 4A        		bcc noprintable
+0093ED  1               		;chartest
+0093ED  1  8A           		txa
+0093EE  1  48           		pha			;x retten
+0093EF  1  A6 13        		ldx Z_ACTIVEFN
+0093F1  1  20 0F F3     		jsr K_FINDFN
+0093F4  1  E8           		inx
+0093F5  1  8E CD 93     		stx fnindex
+0093F8  1  BD CE 93     		lda charnum,x
+0093FB  1  CD D9 93     		cmp charmax
+0093FE  1  90 2B        		bcc noblock
+009400  1  A9 20        		lda #' '
+009402  1  20 CA F1     		jsr PRINTORG
+009405  1  AE CD 93     		ldx fnindex
+009408  1  FE DA 93     		inc blocknum,x
+00940B  1  A9 00        		lda #0
+00940D  1  9D CE 93     		sta charnum,x
+009410  1               		;blocktest
+009410  1  BD DA 93     		lda blocknum,x
+009413  1  CD E5 93     		cmp blockmax
+009416  1  90 13        		bcc noblock
+009418  1  A9 00        		lda #0
+00941A  1  9D DA 93     		sta blocknum,x
+00941D  1  A9 0D        		lda #13			;CR
+00941F  1  20 CA F1     		jsr PRINTORG		;Neue Zeile
+009422  1  24 13        		bit Z_ACTIVEFN
+009424  1  10 05        		bpl noblock
+009426  1  A9 0A        		lda #$0a
+009428  1  20 CA F1     		jsr PRINTORG		;bei >=128 LF
+00942B  1  AE CD 93     noblock:	ldx fnindex
+00942E  1  FE CE 93     		inc charnum,x
+009431  1  68           		pla			;x wiederherstellen
+009432  1  AA           		tax
+009433  1  68           		pla
+009434  1  4C CA F1     		jmp PRINTORG
+009437  1               
+009437  1  68           noprintable:	pla
+009438  1  60           		rts
+009439  1               
+009439  1               .endproc
+009439  1               
+009439  1               .proc old
+009439  1  A0 01        		ldy #$01		;Basic-Old
+00943B  1  98           		tya			;New-Befehl rückgängig machen
+00943C  1  91 2B        		sta (STARTBASIC),Y	;Basic-Anfang $0801+1
+00943E  1  20 33 A5     		jsr B_BINDLINES	;Basic-Zeilen neu binden
+009441  1  8A           		txa			;Ende low in x nach A
+009442  1  69 02        		adc #$02		;plus 2
+009444  1  85 2D        		sta STARTVAR		;bei Basic-PRG-Ende speichern
+009446  1  A5 23        		lda $23			;Ende High
+009448  1  69 00        		adc #$00		;plus eventuellen Überlauf
+00944A  1  85 2E        		sta STARTVAR+1		;nach Basic Ende
+00944C  1  4C AE A7     		jmp B_INTER
+00944F  1               .endproc
+00944F  1               
+00944F  1               
+00944F  1               .proc off
+00944F  1  A2 00        		ldx #<$a000
+009451  1  A0 A0        		ldy #>$a000
+009453  1  18           		clc
+009454  1  20 25 FE     		jsr K_MEMTOP		;memtop setzen
+009457  1  86 37        		stx BASICEND
+009459  1  84 38        		sty BASICEND+1
+00945B  1  86 33        		stx STARTSTR
+00945D  1  84 34        		sty STARTSTR+1
+00945F  1  A9 7C        		lda #<$a57c
+009461  1  A0 A5        		ldy #>$a57c
+009463  1  8D 04 03     		sta TOKENVEK
+009466  1  8C 05 03     		sty TOKENVEK+1
+009469  1  A9 1A        		lda #<$a71a
+00946B  1  A0 A7        		ldy #>$a71a
+00946D  1  8D 06 03     		sta LISTVEK
+009470  1  8C 07 03     		sty LISTVEK+1
+009473  1  A9 E4        		lda #<$a7e4
+009475  1  A0 A7        		ldy #>$a7e4
+009477  1  8D 08 03     		sta CMDVEK
+00947A  1  8C 09 03     		sty CMDVEK+1
+00947D  1  A9 86        		lda #<$ae86
+00947F  1  A0 AE        		ldy #>$ae86
+009481  1  8D 0A 03     		sta FUNVEK
+009484  1  8C 0B 03     		sty FUNVEK+1
+009487  1  A9 8B        		lda #<B_NMIORGVEK
+009489  1  A0 E3        		ldy #>B_NMIORGVEK
+00948B  1               		;sta NMIVEK
+00948B  1               		;sty NMIVEK+1
+00948B  1               		;jmp (NMIVEK)
+00948B  1  4C AE A7     		jmp B_INTER
+00948E  1               .endproc
+00948E  1               
+00948E  1               ;********** RENUMBER **************
+00948E  1               
+00948E  1               .proc renumber
+00948E  1  20 59 A6     exit:		jsr B_CLR
+009491  1  20 9E 94     		jsr changeline
+009494  1  20 59 A6     		jsr B_CLR
+009497  1  18           noinput:	clc
+009498  1  20 31 A8     		jsr B_END
+00949B  1  4C AE A7     		jmp B_INTER
+00949E  1               .endproc
+00949E  1               
+00949E  1               .proc changeline		;von $a49c
+00949E  1  A9 00        		lda #0
+0094A0  1  85 7A        		sta $7a
+0094A2  1  A9 02        		lda #2
+0094A4  1  85 7B        		sta $7b
+0094A6  1  20 79 00     		jsr CHRGOT
+0094A9  1  20 6B A9     		jsr B_ZNRADR	;Zeilennr in Adresse $14$15
+0094AC  1  20 79 A5     		jsr B_TOKENLINE	;Zeile in Tokens wandeln
+0094AF  1  84 0B        		sty $0b		;Zeiger in Eingabepuffer
+0094B1  1  20 13 A6     		jsr B_FINDLINE	;Adresse in Basic-Zeile berechnen
+0094B4  1  90 03        		bcc skipdel
+0094B6  1  20 BD 94     		jsr delline
+0094B9  1  20 02 95     skipdel:	jsr insertline
+0094BC  1  60           		rts
+0094BD  1               .endproc
+0094BD  1               
+0094BD  1               .proc delline			;von $a4a9
+0094BD  1  A0 01        		ldy #1
+0094BF  1  B1 5F        		lda ($5f),y
+0094C1  1  85 23        		sta $23
+0094C3  1  A5 2D        		lda $2d
+0094C5  1  85 22        		sta $22
+0094C7  1  A5 60        		lda $60
+0094C9  1  85 25        		sta $25
+0094CB  1  A5 5F        		lda $5f
+0094CD  1  88           		dey
+0094CE  1  F1 5F        		sbc ($5f),y
+0094D0  1  18           		clc
+0094D1  1  65 2D        		adc $2d
+0094D3  1  85 2D        		sta $2d
+0094D5  1  85 24        		sta $24
+0094D7  1  A5 2E        		lda $2e
+0094D9  1  69 FF        		adc #$ff
+0094DB  1  85 2E        		sta $2e
+0094DD  1  E5 60        		sbc $60
+0094DF  1  AA           		tax
+0094E0  1  38           		sec
+0094E1  1  A5 5F        		lda $5f
+0094E3  1  E5 2D        		sbc $2d
+0094E5  1  A8           		tay
+0094E6  1  B0 03        		bcs skip
+0094E8  1  E8           		inx
+0094E9  1  C6 25        		dec $25
+0094EB  1  18           skip:		clc
+0094EC  1  65 22        		adc $22
+0094EE  1  90 03        		bcc loop
+0094F0  1  C6 23        		dec $23
+0094F2  1  18           		clc
+0094F3  1  B1 22        loop:		lda ($22),y
+0094F5  1  91 24        		sta ($24),y
+0094F7  1  C8           		iny
+0094F8  1  D0 F9        		bne loop
+0094FA  1  E6 23        		inc $23
+0094FC  1  E6 25        		inc $25
+0094FE  1  CA           		dex
+0094FF  1  D0 F2        		bne loop
+009501  1  60           		rts
+009502  1               .endproc
+009502  1               
+009502  1               .proc insertline
+009502  1               		;jsr B_CLR
+009502  1  20 33 A5     		jsr B_BINDLINES
+009505  1  AD 00 02     		lda $200
+009508  1  F0 35        		beq exit
+00950A  1  18           		clc
+00950B  1  A5 2D        		lda $2d
+00950D  1  85 5A        		sta $5a
+00950F  1  65 0B        		adc $0b
+009511  1  85 58        		sta $58
+009513  1  A4 2E        		ldy $2e
+009515  1  84 5B        		sty $5b
+009517  1  90 01        		bcc skip
+009519  1  C8           		iny
+00951A  1  84 59        skip:		sty $59
+00951C  1  20 B8 A3     		jsr B_MOVBLOCK	;Zeile verschieben
+00951F  1  A5 14        		lda $14
+009521  1  A4 15        		ldy $15
+009523  1  8D FE 01     		sta $1fe
+009526  1  8C FF 01     		sty $1ff
+009529  1  A5 31        		lda $31
+00952B  1  A4 32        		ldy $32
+00952D  1  85 2D        		sta $2d
+00952F  1  84 2E        		sty $2e
+009531  1  A4 0B        		ldy $0b
+009533  1  88           		dey
+009534  1  B9 FC 01     loop:		lda $1fc,y
+009537  1  91 5F        		sta ($5f),y
+009539  1  88           		dey
+00953A  1  10 F8        		bpl loop
+00953C  1               		;jsr B_CLR
+00953C  1  20 33 A5     		jsr B_BINDLINES
+00953F  1  60           exit:		rts
+009540  1               .endproc
+009540  1               
+009540  1               .proc linetobuf
+009540  1  A9 00        		lda #0
+009542  1  60           		rts
+009543  1               .endproc
+009543  1               
+009543  1               ; renumber.828 - renumber BASIC program lines for C64, in 6502 Assembler
+009543  1               ; author Neil Franklin, last modification unknown (estimated 1986)
+009543  1               ;  this disassembly/source reconstruction 2000.06.07
+009543  1               ; renumber BASIC program,  RENUM ff,nn,ss (ff = from, nn = new, ss = step)
+009543  1               
+009543  1               .proc renum
+009543  1               		;jsr B_CHKKOMMA	; BASIC check for comma
+009543  1  20 8A AD     		jsr B_GETNUM   	; BASIC get numeric argument
+009546  1  20 F7 B7     		jsr B_GETADR	; BASIC convert to address
+009549  1  8C EA 95     		sty from   	; set "from"
+00954C  1  8D EB 95     		sta from+1
+00954F  1               
+00954F  1  20 FD AE     		jsr B_CHKKOMMA	; BASIC
+009552  1  20 8A AD     		jsr B_GETNUM
+009555  1  20 F7 B7     		jsr B_GETADR
+009558  1  8C EC 95     		sty new   	; set "new"
+00955B  1  8D ED 95     		sta new+1
+00955E  1               
+00955E  1  20 FD AE     		jsr B_CHKKOMMA	; BASIC
+009561  1  20 8A AD     		jsr B_GETNUM
+009564  1  20 F7 B7     		jsr B_GETADR
+009567  1  8C EE 95     		sty step   	; set "step"
+00956A  1  8D EF 95     		sta step+1
+00956D  1               
+00956D  1  20 59 A6     		jsr B_CLR	;Variablen löschen
+009570  1               
+009570  1  A5 2C        		lda STARTBASIC+1	; begin BASIC program HI
+009572  1  85 15        		sta GENPTR+1
+009574  1  A6 2B        		ldx STARTBASIC     	; begin BASIC program LO
+009576  1  CA           		dex
+009577  1  86 14        		stx GENPTR     	; CBM use for generic pointer
+009579  1  E8           		inx
+00957A  1  D0 02        		bne loop
+00957C  1  C6 15        		dec GENPTR+1     	; set to begin BASIC - 1
+00957E  1  A0 00        loop:  		ldy #$00    	; chech for line begin
+009580  1  B1 14        		lda (GENPTR),Y
+009582  1               
+009582  1  F0 0E        		beq getnxtln   	; 0 = end byte of prev line
+009584  1  18           		clc
+009585  1  A5 14        		lda GENPTR
+009587  1  69 01        		adc #$01
+009589  1  85 14        		sta GENPTR
+00958B  1  90 02        		bcc skip1
+00958D  1  E6 15        		inc GENPTR+1
+00958F  1  4C 7E 95     skip1:  	jmp loop   	; test for next byte
+009592  1  C8           getnxtln:  	iny  		; get "next line" pointer
+009593  1  B1 14        		lda (GENPTR),Y
+009595  1  D0 0E        		bne twoinc   	; n l pointer = 0 0, is end
+009597  1  C8           		iny
+009598  1  B1 14        		lda (GENPTR),Y
+00959A  1  D0 0A        		bne oneinc
+00959C  1  20 31 A8     		jsr B_END
+00959F  1  20 59 A6     		jsr B_CLR
+0095A2  1  4C AE A7     		jmp B_INTER
+0095A5  1               		;rts
+0095A5  1               
+0095A5  1  C8           twoinc:  	iny
+0095A6  1  C8           oneinc:  	iny  		; after ptr = line number
+0095A7  1  B1 14        		lda (GENPTR),Y	; compare ($14,Y) with "from"
+0095A9  1  38 ED EA 95  		sub from
+0095AD  1  C8           		iny
+0095AE  1  B1 14        		lda (GENPTR),Y
+0095B0  1  ED EB 95     		sbc from+1
+0095B3  1  90 22        		bcc norenum   	; not yet at lines to renumb
+0095B5  1               
+0095B5  1  AD ED 95     		lda new+1	; check if line is beyond 64000
+0095B8  1  C9 FA        		cmp #$FA    	; new >= $FA00 = 64000
+0095BA  1  B0 29        		bcs message  	; too many lines, error abort
+0095BC  1               
+0095BC  1               		;renumber line
+0095BC  1  20 F0 95     		jsr savelnref	;store linereference at end of mem ($33)
+0095BF  1  91 14        		sta (GENPTR),Y 	; renumber HI
+0095C1  1  88           		dey
+0095C2  1  AD EC 95     		lda new
+0095C5  1  91 14        		sta (GENPTR),Y 	; renumber LO
+0095C7  1  18 6D EE 95  		add step   	; add step to new
+0095CB  1  8D EC 95     		sta new
+0095CE  1  AD ED 95     		lda new+1
+0095D1  1  6D EF 95     		adc step+1
+0095D4  1  8D ED 95     		sta new+1
+0095D7  1               		;end renumber line
+0095D7  1               
+0095D7  1  A5 14        norenum:  	lda GENPTR     	; jump over line header
+0095D9  1  18 69 06     		add #$06
+0095DC  1  85 14        		sta GENPTR
+0095DE  1  90 02        		bcc nextln
+0095E0  1  E6 15        		inc GENPTR+1
+0095E2  1  4C 7E 95     nextln:  	jmp loop    	; look for next line
+0095E5  1               
+0095E5  1  A2 06        message:  	ldx #6    	;message "too many lines"
+0095E7  1  4C 76 90     		jmp errormsg	; print error msg at ($22)
+0095EA  1               .endproc
+0095EA  1               
+0095EA  1               ;variables for renumbering lines
+0095EA  1  00 00        from:  		.word 0    	; from
+0095EC  1  00 00        new:  		.word 0    	; new
+0095EE  1  00 00        step:  		.word 0    	; step
+0095F0  1               
+0095F0  1               ;Save linereferences new->old on top of memory
+0095F0  1               .proc savelnref
+0095F0  1  48           		pha
+0095F1  1  98           		tya
+0095F2  1  48           		pha
+0095F3  1               
+0095F3  1  A5 33        		lda STARTSTR	;make four bytes place for saving two integers
+0095F5  1  38 E9 04     		sub #4
+0095F8  1  85 33        		sta STARTSTR
+0095FA  1  A5 34        		lda STARTSTR+1
+0095FC  1  E9 00        		sbc #0
+0095FE  1  85 34        		sta STARTSTR+1
+009600  1               
+009600  1  B1 14        		lda (GENPTR),y	;Save original at 2,3
+009602  1  88           		dey
+009603  1  91 33        		sta (STARTSTR),y
+009605  1               
+009605  1  B1 14        		lda (GENPTR),y
+009607  1  88           		dey
+009608  1  91 33        		sta (STARTSTR),y
+00960A  1  AD ED 95     		lda new+1	;Save new at 0,1
+00960D  1  88           		dey
+00960E  1  91 33        		sta (STARTSTR),y
+009610  1  AD EC 95     		lda new
+009613  1  88           		dey
+009614  1  91 33        		sta (STARTSTR),y
+009616  1               
+009616  1  68           		pla
+009617  1  A8           		tay
+009618  1  68           		pla
+009619  1  60           		rts
+00961A  1               .endproc
+00961A  1               ;********** ENDE RENUMBER **************
+00961A  1               
+00961A  1               .proc dir
+00961A  1  F0 04        		beq nopara
+00961C  1  20 03 E2     		jsr B_GETBYTEX
+00961F  1  2C           		.byte $2c
+009620  1  A2 08        nopara:		ldx #8
+009622  1  20 28 96     		jsr directory
+009625  1  4C AE A7     		jmp B_INTER
+009628  1               .endproc
+009628  1               
+009628  1               .proc directory
+009628  1  A9 24        		lda #'$'
+00962A  1  85 FB        		sta TMPPTR
+00962C  1  A9 FB        		lda #<TMPPTR
+00962E  1  A0 00        		ldy #>TMPPTR
+009630  1  85 BB        		sta Z_FNADR
+009632  1  84 BC        		sty Z_FNADR+1
+009634  1  A9 01        		lda #1
+009636  1  85 B7        		sta Z_FNLEN
+009638  1               		;lda #8
+009638  1  86 BA        		stx Z_FA
+00963A  1  A9 60        		lda #$60
+00963C  1  85 B9        		sta Z_SA
+00963E  1  20 D5 F3     		jsr K_SENDNAM
+009641  1  A5 BA        		lda Z_FA
+009643  1  20 B4 FF     		jsr K_TALK
+009646  1  A5 B9        		lda Z_SA
+009648  1  20 96 FF     		jsr K_SECTALK
+00964B  1  A9 00        		lda #0
+00964D  1  85 90        		sta STATUS
+00964F  1  A0 03        		ldy #3
+009651  1  84 FB        l1:		sty TMPPTR
+009653  1  20 E1 FF     		jsr K_CHKSTOP
+009656  1  F0 38        		beq l4
+009658  1  20 A5 FF     		jsr K_IECIN
+00965B  1  85 FC        		sta TMPPTR+1
+00965D  1  A4 90        		ldy STATUS
+00965F  1  D0 2F        		bne l4
+009661  1  20 A5 FF     		jsr K_IECIN
+009664  1  A4 90        		ldy STATUS
+009666  1  D0 28        		bne l4
+009668  1  A4 FB        		ldy TMPPTR
+00966A  1  88           		dey
+00966B  1  D0 E4        		bne l1
+00966D  1  A6 FC        		ldx TMPPTR+1
+00966F  1  20 CD BD     		jsr B_LNPRT
+009672  1  A9 20        		lda #' '
+009674  1  20 rr rr     		jsr BSOUT
+009677  1  20 A5 FF     l3:		jsr K_IECIN
+00967A  1  A6 90        		ldx STATUS
+00967C  1  D0 12        		bne l4
+00967E  1  AA           		tax
+00967F  1  F0 06        		beq l2
+009681  1  20 rr rr     		jsr BSOUT
+009684  1  4C 77 96     		jmp l3
+009687  1  A9 0D        l2:		lda #13
+009689  1  20 rr rr     		jsr BSOUT
+00968C  1  A0 02        		ldy #2
+00968E  1  D0 C1        		bne l1
+009690  1  20 42 F6     l4:		jsr K_CLSFIL
+009693  1  60           		rts
+009694  1               .endproc
+009694  1               
+009694  1               .proc ver
+009694  1  A2 00        		ldx #0
+009696  1  20 3E 90     		jsr msgout
+009699  1  4C AE A7     		jmp B_INTER
+00969C  1               .endproc
+00969C  1               .proc notimp
+00969C  1  A2 01        		ldx #1
+00969E  1  20 76 90     		jsr errormsg
+0096A1  1  4C AE A7     		jmp B_INTER
+0096A4  1               .endproc
+0096A4  1               ;**************** Funktionen *********************
+0096A4  1               .proc gethex	;holt eine Hexzahl
+0096A4  1  20 87 92     		jsr clrfac
+0096A7  1  20 73 00     getnext:	jsr CHRGET
+0096AA  1  90 0A        		bcc ziffer
+0096AC  1  C9 41        		cmp #'a'
+0096AE  1  90 1E        		bcc end
+0096B0  1  C9 47        		cmp #'f'+1
+0096B2  1  B0 1A        		bcs end
+0096B4  1  69 F9        		adc #-7		;sub 7 Offset korrigieren, set carry
+0096B6  1  38 E9 30     ziffer:		sub #'0'
+0096B9  1  48           		pha
+0096BA  1  A5 61        		lda FAC1
+0096BC  1  F0 07        		beq nochnull
+0096BE  1  18 69 04     		add #4
+0096C1  1  B0 0E        		bcs over	;Überlauf?
+0096C3  1  85 61        		sta FAC1
+0096C5  1  68           nochnull:	pla
+0096C6  1  F0 DF        		beq getnext
+0096C8  1  20 7E BD     		jsr B_ADDZIFFER	;Ziffer zu FAC addieren
+0096CB  1  4C A7 96     		jmp getnext
+0096CE  1  4C 79 00     end:		jmp CHRGOT
+0096D1  1  4C 7E B9     over:		jmp B_OVERFLOW
+0096D4  1               .endproc
+0096D4  1               
+0096D4  1               .proc getbin
+0096D4  1  20 87 92     		jsr clrfac
+0096D7  1  20 73 00     getbin:		jsr CHRGET
+0096DA  1  C9 32        		cmp #'2'
+0096DC  1  B0 18        		bcs end
+0096DE  1  C9 30        		cmp #'0'
+0096E0  1  90 14        		bcc end
+0096E2  1  E9 30        		sbc #'0'
+0096E4  1  48           		pha
+0096E5  1  A5 61        		lda FAC1
+0096E7  1  F0 04        		beq null
+0096E9  1  E6 61        		inc FAC1
+0096EB  1  F0 0C        		beq over
+0096ED  1  68           null:		pla
+0096EE  1  F0 E7        		beq getbin
+0096F0  1  20 7E BD     		jsr B_ADDZIFFER
+0096F3  1  4C D7 96     		jmp getbin
+0096F6  1  4C 79 00     end:		jmp CHRGOT
+0096F9  1  4C 7E B9     over:		jmp B_OVERFLOW
+0096FC  1               .endproc
+0096FC  1               
+0096FC  1               
+0096FC  1               .proc getnextstr
+0096FC  1               		;jsr CHRGET
+0096FC  1  20 9E AD     		jsr B_FRMEVL		; String auf Descriptorstack $61,62,63
+0096FF  1  20 8F AD     		jsr B_CHKSTR		;Ausdruck auch ein String?
+009702  1  20 A3 B6     		jsr B_FRESTR		;hi y, lo x, len a
+009705  1  60           		rts
+009706  1               .endproc
+009706  1               
+009706  1               .proc transpose
+009706  1               		;Transposition Argumente auf Stack nach 3,4,5 von 6,7,8 result 9,10,11
+009706  1  20 FC 96     		jsr getnextstr
+009709  1  48           		pha
+00970A  1  98           		tya
+00970B  1  48           		pha
+00970C  1  8A           		txa
+00970D  1  48           		pha
+00970E  1               
+00970E  1  20 FD AE     		jsr B_CHKKOMMA
+009711  1               
+009711  1  20 FC 96     		jsr getnextstr
+009714  1  48           		pha
+009715  1  98           		tya
+009716  1  48           		pha
+009717  1  8A           		txa
+009718  1  48           		pha
+009719  1               
+009719  1  20 FD AE     		jsr B_CHKKOMMA
+00971C  1               
+00971C  1  20 FC 96     		jsr getnextstr
+00971F  1  48           		pha
+009720  1  98           		tya
+009721  1  48           		pha
+009722  1  8A           		txa
+009723  1  48           		pha
+009724  1               
+009724  1  20 F7 AE     		jsr B_CHKCLOSE		; )?
+009727  1               
+009727  1  BA           		tsx
+009728  1  BD 09 01     		lda STACK+9,x
+00972B  1  AA           		tax
+00972C  1  20 7D B4     		jsr B_MKSTR		;macht einen neuen STR bei $62/$63, Len $61 (NEWSTR)
+00972F  1               
+00972F  1               		;Check ob ARG1LEN=ARG2LEN
+00972F  1  BA           		tsx
+009730  1  BD 03 01     		lda STACK+3,x
+009733  1  DD 06 01     		cmp STACK+6,x
+009736  1  D0 58        		bne error
+009738  1  DD 09 01     		cmp STACK+9,x
+00973B  1  D0 53        		bne error		;Alle 3 Strings müssen gleich lang sein
+00973D  1               
+00973D  1  BD 01 01     		lda STACK+1,x
+009740  1  85 58        		sta ARG2STRPTR
+009742  1  BD 02 01     		lda STACK+2,x
+009745  1  85 59        		sta ARG2STRPTR+1
+009747  1  BD 03 01     		lda STACK+3,x
+00974A  1  85 57        		sta ARG2STRLEN
+00974C  1               
+00974C  1  BD 04 01     		lda STACK+4,x
+00974F  1  85 6A        		sta ARG1STRPTR
+009751  1  BD 05 01     		lda STACK+5,x
+009754  1  85 6B        		sta ARG1STRPTR+1
+009756  1  BD 06 01     		lda STACK+6,x
+009759  1  85 69        		sta ARG1STRLEN
+00975B  1               
+00975B  1  BD 07 01     		lda STACK+7,x
+00975E  1  85 5D        		sta TMPSTRPTR
+009760  1  BD 08 01     		lda STACK+8,x
+009763  1  85 5E        		sta TMPSTRPTR+1
+009765  1  BD 09 01     		lda STACK+9,x
+009768  1  85 5C        		sta TMPSTRLEN
+00976A  1               
+00976A  1  A4 5C        		ldy TMPSTRLEN
+00976C  1  F0 1A        loop:		beq exit
+00976E  1  88           		dey
+00976F  1  B1 5D        		lda (TMPSTRPTR),y
+009771  1  AA           		tax			;Zeichen in X merken
+009772  1  B1 6A        		lda (ARG1STRPTR),y	;Position 1 Suchzeichen von Tabelle 1
+009774  1  84 5F        		sty TMPSTRPTR+2		;merken
+009776  1               
+009776  1  A4 57        		ldy ARG2STRLEN		;in Tabelle 2 suchen
+009778  1  88           search:		dey
+009779  1  C0 FF        		cpy #-1
+00977B  1  F0 16        		beq notfound
+00977D  1  D1 58        		cmp (ARG2STRPTR),y
+00977F  1  D0 F7        		bne search
+009781  1  8A           		txa
+009782  1  91 62        		sta (NEWSTRPTR),y	;Transposition ausführen
+009784  1               
+009784  1  A4 5F        		ldy TMPSTRPTR+2
+009786  1  D0 E4        		bne loop
+009788  1               
+009788  1  BA           exit:		tsx
+009789  1  8A           		txa
+00978A  1  CB F7        		axs #-9		;add #5; tax
+00978C  1  9A           		txs
+00978D  1  4C CA B4     		jmp B_RETSTR
+009790  1               
+009790  1  A2 00        error:		ldx #0
+009792  1  2C           		.byte $2c	;bit $xxxx überspringt nächten Befehl
+009793  1  A2 01        notfound:	ldx #1
+009795  1  4C 76 90     		jmp errormsg
+009798  1               .endproc	;transpose
+009798  1               
+009798  1               
+009798  1               .proc subst
+009798  1               		;Substitution Argumente auf Stack nach 3,4,5 von 6,7,8 result 9,10,11
+009798  1  20 FC 96     		jsr getnextstr
+00979B  1  48           		pha
+00979C  1  98           		tya
+00979D  1  48           		pha
+00979E  1  8A           		txa
+00979F  1  48           		pha
+0097A0  1               
+0097A0  1  20 FD AE     		jsr B_CHKKOMMA
+0097A3  1               
+0097A3  1  20 FC 96     		jsr getnextstr
+0097A6  1  48           		pha
+0097A7  1  98           		tya
+0097A8  1  48           		pha
+0097A9  1  8A           		txa
+0097AA  1  48           		pha
+0097AB  1               
+0097AB  1  20 FD AE     		jsr B_CHKKOMMA
+0097AE  1               
+0097AE  1  20 FC 96     		jsr getnextstr
+0097B1  1  48           		pha
+0097B2  1  98           		tya
+0097B3  1  48           		pha
+0097B4  1  8A           		txa
+0097B5  1  48           		pha
+0097B6  1               
+0097B6  1  20 F7 AE     		jsr B_CHKCLOSE		; )?
+0097B9  1               
+0097B9  1  BA           		tsx
+0097BA  1  BD 09 01     		lda STACK+9,x
+0097BD  1  AA           		tax
+0097BE  1  20 7D B4     		jsr B_MKSTR		;macht einen neuen STR bei $62/$63, Len $61 (NEWSTR)
+0097C1  1               
+0097C1  1               		;Check ob ARG1LEN=ARG2LEN
+0097C1  1  BA           		tsx
+0097C2  1  BD 03 01     		lda STACK+3,x
+0097C5  1  DD 06 01     		cmp STACK+6,x
+0097C8  1  D0 53        		bne error
+0097CA  1               
+0097CA  1  BD 01 01     		lda STACK+1,x
+0097CD  1  85 58        		sta ARG2STRPTR
+0097CF  1  BD 02 01     		lda STACK+2,x
+0097D2  1  85 59        		sta ARG2STRPTR+1
+0097D4  1  BD 03 01     		lda STACK+3,x
+0097D7  1  85 57        		sta ARG2STRLEN
+0097D9  1               
+0097D9  1  BD 04 01     		lda STACK+4,x
+0097DC  1  85 6A        		sta ARG1STRPTR
+0097DE  1  BD 05 01     		lda STACK+5,x
+0097E1  1  85 6B        		sta ARG1STRPTR+1
+0097E3  1  BD 06 01     		lda STACK+6,x
+0097E6  1  85 69        		sta ARG1STRLEN
+0097E8  1               
+0097E8  1  BD 07 01     		lda STACK+7,x
+0097EB  1  85 5D        		sta TMPSTRPTR
+0097ED  1  BD 08 01     		lda STACK+8,x
+0097F0  1  85 5E        		sta TMPSTRPTR+1
+0097F2  1  BD 09 01     		lda STACK+9,x
+0097F5  1  85 5C        		sta TMPSTRLEN
+0097F7  1               
+0097F7  1  A4 5C        		ldy TMPSTRLEN
+0097F9  1  F0 1A        loop:		beq exit
+0097FB  1  88           		dey
+0097FC  1  B1 5D        		lda (TMPSTRPTR),y
+0097FE  1  84 5F        		sty TMPSTRPTR+2		;merken
+009800  1               
+009800  1  A4 69        		ldy ARG1STRLEN
+009802  1  88           search:		dey
+009803  1  C0 FF        		cpy #-1
+009805  1  F0 0A        		beq notfound
+009807  1  D1 6A        		cmp (ARG1STRPTR),y
+009809  1  D0 F7        		bne search
+00980B  1               
+00980B  1  B1 58        		lda (ARG2STRPTR),y	;substitute
+00980D  1               
+00980D  1  A4 5F        		ldy TMPSTRPTR+2		;restore Index
+00980F  1  91 62        		sta (NEWSTRPTR),y
+009811  1  A4 5F        notfound:	ldy TMPSTRPTR+2		;restore Index
+009813  1  D0 E4        		bne loop
+009815  1               
+009815  1  BA           exit:		tsx
+009816  1  8A           		txa
+009817  1  CB F7        		axs #-9		;add #5; tax
+009819  1  9A           		txs
+00981A  1  4C CA B4     		jmp B_RETSTR
+00981D  1               
+00981D  1  A2 00        error:		ldx #0
+00981F  1  4C 76 90     		jmp errormsg
+009822  1               .endproc	;subst
+009822  1               
+009822  1               
+009822  1               
+009822  1               
+009822  1               
+009822  1               .proc reverse	;Invertiert den String, der bei NEWSTR steht
+009822  1  A5 62        		lda NEWSTRPTR
+009824  1  18 65 61     		add NEWSTRLEN
+009827  1  85 5D        		sta TMPSTRPTR
+009829  1  A5 63        		lda NEWSTRPTR+1
+00982B  1  69 FF        		adc #-1
+00982D  1  85 5E        		sta TMPSTRPTR+1
+00982F  1               
+00982F  1  A5 61        		lda NEWSTRLEN
+009831  1  4A           		lsr 			;Länge durch 2 teilen
+009832  1  A8           		tay			;und bei X merken
+009833  1               
+009833  1  88           loop:		dey
+009834  1  30 17        		bmi exit
+009836  1  B1 62        		lda (NEWSTRPTR),y
+009838  1  AA           		tax
+009839  1  98           		tya
+00983A  1  49 FF        		eor #$ff
+00983C  1  A8           		tay
+00983D  1  B1 5D        		lda (TMPSTRPTR),y
+00983F  1  48           		pha
+009840  1  8A           		txa
+009841  1  91 5D        		sta (TMPSTRPTR),y
+009843  1  98           		tya
+009844  1  49 FF        		eor #$ff
+009846  1  A8           		tay
+009847  1  68           		pla
+009848  1  91 62        		sta (NEWSTRPTR),y
+00984A  1  4C 33 98     		jmp loop
+00984D  1               
+00984D  1  60           exit:		rts
+00984E  1               .endproc
+00984E  1               
+00984E  1               .proc rotate
+00984E  1  20 FC 96     		jsr getnextstr
+009851  1  48           		pha
+009852  1  98           		tya
+009853  1  48           		pha
+009854  1  8A           		txa
+009855  1  48           		pha
+009856  1               		;---- bis hierher Kopie von filter
+009856  1  20 FD AE     		jsr B_CHKKOMMA
+009859  1  48           		pha			;merken ob reverse
+00985A  1  C9 AB        		cmp #$ab		;"-" Reverse?
+00985C  1  D0 03        		bne :+
+00985E  1  20 73 00     		jsr CHRGET		;Zeichen erstmal überlesen
+009861  1               
+009861  1  20 03 E2     :		jsr B_GETBYTEX
+009864  1               		;jsr B_GETKOMMABYTE	;hole zweiten Parameter (a sowie x)
+009864  1  86 07        		stx SEARCHBYTE
+009866  1               					;Rotationsweite
+009866  1  20 F7 AE     		jsr B_CHKCLOSE		; )?
+009869  1               
+009869  1  BA           		tsx
+00986A  1  BD 04 01     		lda STACK+4,x		;Stringlänge für neuen String vom Stack
+00986D  1               
+00986D  1  C5 07        		cmp SEARCHBYTE		;Rotation muss kleiner sein als Stringlänge
+00986F  1  90 56        		bcc error		;wenn größer oder gleich -> Error
+009871  1  F0 54        		beq error
+009873  1               
+009873  1  AA           		tax
+009874  1  20 7D B4     		jsr B_MKSTR		;macht einen neuen STR bei $62/$63, Len $61 (NEWSTR)
+009877  1               
+009877  1  BA           		tsx			;Originalstring nach TMPSTR
+009878  1  BD 04 01     		lda STACK+4,x
+00987B  1  85 5C        		sta TMPSTRLEN
+00987D  1  BD 03 01     		lda STACK+3,x
+009880  1  85 5E        		sta TMPSTRPTR+1
+009882  1  BD 02 01     		lda STACK+2,x
+009885  1  85 5D        		sta TMPSTRPTR
+009887  1               
+009887  1  A5 62        		lda NEWSTRPTR		;Zielpointer berechnen
+009889  1  18 65 07     		add SEARCHBYTE		;Vom Pointer die Rotation addieren
+00988C  1  85 6A        		sta ARG1STRPTR
+00988E  1  A5 63        		lda NEWSTRPTR+1
+009890  1  69 00        		adc #0
+009892  1  85 6B        		sta ARG1STRPTR+1
+009894  1               
+009894  1  A5 07        		lda SEARCHBYTE
+009896  1  38 E5 5C     		sub TMPSTRLEN
+009899  1  AA           		tax			;Lauflänge vor Adresshochschaltung
+00989A  1  A0 00        		ldy #0
+00989C  1  C4 5C        loop:		cpy TMPSTRLEN		;Für alle Zeichen des Strings
+00989E  1  F0 17        		beq endl
+0098A0  1  B1 5D        		lda (TMPSTRPTR),y
+0098A2  1  91 6A        		sta (ARG1STRPTR),y
+0098A4  1  C8           		iny
+0098A5  1  E8           		inx
+0098A6  1  D0 F4        		bne loop		;Zieladresse runterschalten?
+0098A8  1  A5 6A        		lda ARG1STRPTR
+0098AA  1  38 E5 5C     		sub TMPSTRLEN
+0098AD  1  85 6A        		sta ARG1STRPTR
+0098AF  1  A5 6B        		lda ARG1STRPTR+1
+0098B1  1  E9 00        		sbc #0
+0098B3  1  85 6B        		sta ARG1STRPTR+1
+0098B5  1  B0 E5        		bcs loop
+0098B7  1               
+0098B7  1  68           endl:		pla			;soll reverse aktiviert werden?
+0098B8  1  C9 AB        		cmp #$ab		;"-" das Reverseflag
+0098BA  1  D0 03        		bne :+
+0098BC  1  20 22 98     		jsr reverse
+0098BF  1  BA           :		tsx
+0098C0  1  8A           		txa
+0098C1  1  CB FD        		axs #-3
+0098C3  1  9A           		txs
+0098C4  1  4C CA B4     		jmp B_RETSTR
+0098C7  1               
+0098C7  1  A2 03        error:		ldx #3
+0098C9  1  4C 76 90     		jmp errormsg
+0098CC  1               .endproc	;rotate
+0098CC  1               
+0098CC  1               .proc filter	;(STR,BITS)
+0098CC  1  20 FC 96     		jsr getnextstr
+0098CF  1  48           		pha
+0098D0  1  98           		tya
+0098D1  1  48           		pha
+0098D2  1  8A           		txa
+0098D3  1  48           		pha
+0098D4  1               
+0098D4  1  20 00 E2     		jsr B_GETKOMMABYTE	;hole zweiten Parameter (a sowie x)
+0098D7  1  86 07        		stx SEARCHBYTE		;filterbyte
+0098D9  1  20 F7 AE     		jsr B_CHKCLOSE		; )?
+0098DC  1               
+0098DC  1  BA           		tsx
+0098DD  1  BD 03 01     		lda STACK+3,x
+0098E0  1  85 5C        		sta TMPSTRLEN
+0098E2  1  BD 02 01     		lda STACK+2,x
+0098E5  1  85 5E        		sta TMPSTRPTR+1
+0098E7  1  BD 01 01     		lda STACK+1,x
+0098EA  1  85 5D        		sta TMPSTRPTR
+0098EC  1               
+0098EC  1  A2 00        		ldx #0
+0098EE  1  A4 5C        		ldy TMPSTRLEN
+0098F0  1               
+0098F0  1  88           loop:		dey
+0098F1  1  C0 FF        		cpy #-1
+0098F3  1  F0 08        		beq endl
+0098F5  1  20 38 99     		jsr isfilter
+0098F8  1  90 F6        		bcc loop		;not in filter
+0098FA  1  E8           		inx
+0098FB  1  D0 F3        		bne loop		;x=neue Länge
+0098FD  1  8A           endl:		txa			;x->a ist neue Länge
+0098FE  1  20 7D B4     		jsr B_MKSTR		;macht einen neuen STR bei $62/$63, Len $61 (NEWSTR)
+009901  1  BA           		tsx
+009902  1  BD 03 01     		lda STACK+3,x
+009905  1  85 5C        		sta TMPSTRLEN
+009907  1  BD 02 01     		lda STACK+2,x
+00990A  1  85 5E        		sta TMPSTRPTR+1
+00990C  1  BD 01 01     		lda STACK+1,x
+00990F  1  85 5D        		sta TMPSTRPTR
+009911  1               
+009911  1  A6 61        		ldx NEWSTRLEN
+009913  1  A4 5C        		ldy TMPSTRLEN
+009915  1  88           copy:		dey
+009916  1  C0 FF        		cpy #-1
+009918  1  F0 14        		beq endcp		;exit unterhalb Schleife
+00991A  1  20 38 99     		jsr isfilter
+00991D  1  90 F6        		bcc copy		;not in filter
+00991F  1  CA           		dex
+009920  1  84 5F        		sty TMPSTRPTR+2		;sichern x und y
+009922  1  86 60        		stx TMPSTRPTR+3
+009924  1  A4 60        		ldy TMPSTRPTR+3		;x zu y transferieren
+009926  1  91 62        		sta (NEWSTRPTR),y
+009928  1  A4 5F        		ldy TMPSTRPTR+2		;retten
+00992A  1  A6 60        		ldx TMPSTRPTR+3
+00992C  1  B0 E7        		bcs copy		;x=neue Länge
+00992E  1               
+00992E  1  BA           endcp:		tsx
+00992F  1  8A           		txa
+009930  1  CB FD        		axs #-3
+009932  1  9A           		txs
+009933  1  4C CA B4     		jmp B_RETSTR
+009936  1               
+009936  1  F0 F6        nullstr:	beq endcp
+009938  1               .endproc
+009938  1               
+009938  1               ;Sucht duch String in STRPTR,y nach Flags in SEARCH
+009938  1               .proc isfilter	;Übergabe Y und gesetzter Pointer auf STRPTR, SEARCHBYTE ist das gesuchte Flag
+009938  1  8A           		txa
+009939  1  48           		pha			;x sichern
+00993A  1  A5 07        		lda SEARCHBYTE		;Bitlöschungen vornehmen
+00993C  1  49 E0        		eor #%11100000
+00993E  1  09 1F        		ora #%00011111
+009940  1  31 5D        		and (TMPSTRPTR),y
+009942  1  AA           		tax			;Wert für die Dauer der Abfrage in X halten
+009943  1               
+009943  1  A5 07        		lda SEARCHBYTE
+009945  1  29 10        		and #%00010000
+009947  1  F0 06        		beq :+
+009949  1  8A           		txa
+00994A  1  20 88 99     		jsr checkdouble
+00994D  1  90 2E        		bcc exit
+00994F  1               
+00994F  1  A5 07        :		lda SEARCHBYTE
+009951  1  29 01        		and #%00000001		;ASC
+009953  1  F0 06        		beq :+
+009955  1  8A           		txa
+009956  1  20 13 B1     		jsr B_ISCHAR
+009959  1  B0 22        		bcs exit
+00995B  1               
+00995B  1  A5 07        :		lda SEARCHBYTE
+00995D  1  29 02        		and #%00000010		;NUM
+00995F  1  F0 06        		beq :+
+009961  1  8A           		txa
+009962  1  20 A9 99     		jsr isnum
+009965  1  B0 16        		bcs exit
+009967  1               
+009967  1  A5 07        :		lda SEARCHBYTE
+009969  1  29 04        		and #%00000100		;SPC
+00996B  1  F0 06        		beq :+
+00996D  1  8A           		txa
+00996E  1  20 B8 99     		jsr isspc
+009971  1  B0 0A        		bcs exit
+009973  1               
+009973  1  A5 07        :		lda SEARCHBYTE
+009975  1  29 08        		and #%00001000		;CAPITAL
+009977  1  F0 04        		beq exit
+009979  1  8A           		txa
+00997A  1  20 B3 99     		jsr iscapital
+00997D  1               		;bcs exit
+00997D  1               
+00997D  1               exit:
+00997D  1  68           		pla
+00997E  1  AA           		tax
+00997F  1  A5 07        		lda SEARCHBYTE
+009981  1  49 E0        		eor #%11100000
+009983  1  09 1F        		ora #%00011111
+009985  1  31 5D        		and (TMPSTRPTR),y
+009987  1  60           		rts
+009988  1               .endproc
+009988  1               
+009988  1               .proc checkdouble	;Carry set if found double
+009988  1  98           		tya
+009989  1  48           		pha
+00998A  1  8A           		txa
+00998B  1  48           		pha
+00998C  1  BA           		tsx
+00998D  1  88           loop:		dey
+00998E  1  C0 FF        		cpy #-1
+009990  1  F0 10        		beq notfound
+009992  1  A5 07        		lda SEARCHBYTE		;Bitlöschungen vornehmen
+009994  1  49 E0        		eor #%11100000
+009996  1  09 1F        		ora #%00011111
+009998  1  31 5D        		and (TMPSTRPTR),y
+00999A  1  DD 01 01     		cmp STACK+1,x
+00999D  1  F0 02        		beq found		;Carry set
+00999F  1  D0 EC        		bne loop
+0099A1  1  18           found:		clc
+0099A2  1  24           notfound:	.byte $24		;BIT $xx nächten Befehl überspringen
+0099A3  1  38           		sec
+0099A4  1  68           		pla
+0099A5  1  AA           		tax
+0099A6  1  68           		pla
+0099A7  1  A8           		tay
+0099A8  1  60           		rts
+0099A9  1               .endproc
+0099A9  1               
+0099A9  1               .proc isnum
+0099A9  1  C9 30        		cmp #'0'
+0099AB  1  90 05        		bcc :+
+0099AD  1  E9 3A        		sbc #'9'+1
+0099AF  1  38 E9 C6     		sub #-('9'+1)
+0099B2  1  60           :		rts
+0099B3  1               .endproc
+0099B3  1               
+0099B3  1               .proc iscapital
+0099B3  1  49 80        		eor #$80
+0099B5  1  4C 13 B1     		jmp B_ISCHAR
+0099B8  1               .endproc
+0099B8  1               
+0099B8  1               .proc isspc
+0099B8  1  C9 20        		cmp #' '
+0099BA  1  90 07        		bcc :+
+0099BC  1  E9 30        		sbc #'/'+1
+0099BE  1  38 E9 D0     		sub #-('/'+1)
+0099C1  1  B0 09        		bcs exit
+0099C3  1  C9 3A        :		cmp #':'
+0099C5  1  90 05        		bcc exit
+0099C7  1  E9 41        		sbc #'@'+1
+0099C9  1  38 E9 BF     		sub #-('@'+1)
+0099CC  1  60           exit:		rts
+0099CD  1               .endproc
+0099CD  1               
+0099CD  1               ;**************** TABELLEN ********************
+0099CD  1  C3 92 E1 92  cmdtab:		.word repeat-1,until-1,while-1,do-1
+0099D1  1  36 93 18 93  
+0099D5  1  9B 96 9B 96  		.word notimp-1,notimp-1,ver-1,block-1,ver-1
+0099D9  1  93 96 83 93  
+0099DD  1  93 96        
+0099DF  1  93 96 93 96  		.word ver-1,ver-1,ver-1,ver-1,ver-1
+0099E3  1  93 96 93 96  
+0099E7  1  93 96        
+0099E9  1  93 96 93 96  		.word ver-1,ver-1,dir-1,renum-1,old-1
+0099ED  1  19 96 42 95  
+0099F1  1  38 94        
+0099F3  1  4E 94 93 96  		.word off-1, ver-1
+0099F7  1  CC 98 4E 98  funtab:		.word filter, rotate, subst,transpose
+0099FB  1  98 97 06 97  
+0099FF  1               
+0099FF  1               
+0099FF  1               CMDSTART	=$CC		;erstes freies Token
+0099FF  1               CMDEND		=CMDSTART+20	;letztes freies Token
+0099FF  1               FUNSTART	=CMDEND+1
+0099FF  1               FUNEND		=$FE
+0099FF  1               
+0099FF  1               TOK_BLOCK	=$d3
+0099FF  1               TOK_TRANS	=$dc
+0099FF  1               TOK_SUBST	=$dd
+0099FF  1               TOK_ROTATE	=$e2
+0099FF  1               
+0099FF  1  52 45 50 45  newtab:		.byte "repeaT","untiL"	;cc,cd
+009A03  1  41 D4 55 4E  
+009A07  1  54 49 CC     
+009A0A  1  57 48 49 4C  		.byte "whilE","wenD"	;ce,cf
+009A0E  1  C5 57 45 4E  
+009A12  1  C4           
+009A13  1  45 4C 53 C5  		.byte "elsE", "endiF"	;d0, d1
+009A17  1  45 4E 44 49  
+009A1B  1  C6           
+009A1C  1  56 45 D2     		.byte "veR"		;d2
+009A1F  1  42 4C 4F 43  		.byte "blocK"		;d3
+009A23  1  CB           
+009A24  1  43 52 41 43  		.byte "cracK"		;d4
+009A28  1  CB           
+009A29  1  56 45 D2     		.byte "veR"		;d5
+009A2C  1  56 45 D2     		.byte "veR"		;d6
+009A2F  1  56 45 D2     		.byte "veR"		;d7
+009A32  1  56 45 D2     		.byte "veR"		;d8
+009A35  1  56 45 D2     		.byte "veR"		;d9
+009A38  1  56 45 D2     		.byte "veR"		;da
+009A3B  1  56 45 D2     		.byte "veR"		;db
+009A3E  1  44 49 52 45  		.byte "directorY"	;dc
+009A42  1  43 54 4F 52  
+009A46  1  D9           
+009A47  1  52 45 4E 55  		.byte "renuM"		;dd
+009A4B  1  CD           
+009A4C  1  4F 4C C4     		.byte "olD"		;de
+009A4F  1  4F 46 C6     		.byte "ofF"		;df
+009A52  1  56 45 D2     		.byte "veR"		;e0
+009A55  1  46 49 4C 54  		.byte "filter",'$'+$80	;e1
+009A59  1  45 52 A4     
+009A5C  1  52 4F 54 41  		.byte "rotate",'$'+$80  ;e2
+009A60  1  54 45 A4     
+009A63  1  53 55 42 53  		.byte "subst",'$'+$80   ;e3
+009A67  1  54 A4        
+009A69  1  54 52 41 4E  		.byte "trans",'$'+$80	;e4
+009A6D  1  53 A4        
+009A6F  1  00           		.byte 0
+009A70  1               .out .sprintf("Token-Tabelle bei %d Zeichen Länge", *-newtab)
+009A70  1               .if *-newtab > 255
+009A70  1               	.error "Token-Tabelle zu lang!"
+009A70  1               .endif
+009A70  1               
