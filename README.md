@@ -1,4 +1,12 @@
-*CYPHERBASIC*
+***CYPHERBASIC 64***
+
+*compile*
+
+LOAD "cypherbasic",8,1:new:sys9*4096
+compile: ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib
+with cc65 compiler/assembler package
+
+*description*
 
 Just a tiny, little fun-project of mine. I was asking the question: “why does anybody use the C=64 as a cyphering machine, crypto-device?” And I started to build some very simple and basic crypto library functions in 6502. 
 
@@ -196,4 +204,10 @@ But before I throw away much time, I am first looking for any feedback. Latest v
 
 I don’t see an upload feature here, so you have to live with that link in the last paragraph. 
 
-I played around with some cryptomachines and had no problems with implementing basic, classic machines, an enigma should be a easy going with this, but I did not do it yet. I won’t take you away the fun
+I played around with some cryptomachines and had no problems with implementing basic, classic machines, an enigma should be a easy going with this, but I did not do it yet. I won’t take you away the fun.
+
+
+Have fun! 
+Provide feedback, if you had.
+
+Hanno
