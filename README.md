@@ -2,11 +2,11 @@
 
 ##compile##
 
-'''
+```
 LOAD "cypherbasic",8,1:new:sys9*4096
 compile: ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib
 with cc65 compiler/assembler package
-'''
+```
 
 ##description##
 
@@ -18,24 +18,24 @@ The result is this project, still unter development. Its consuming some time to 
 
 There are yet some useful functions in this project, to name some: 
 
-'''
+```
 ROTATE$( String, Rotation) 
-'''
+```
 
 Rotates a String around like for the cesar chiffre. 
 
 Example: 
-'''
+```
 ?ROTATE$(“ABCDEFG”,2) 
 FGABCDE 
 
 SUBST$( Textstring, Alphabetstring, Codestring) 
-'''
+```
 
 Substitutes the chars in the Text with the substitution table from alphabet and codestring just like the rotor of a rotormachine like the enigma. 
 
 Example: 
-'''
+```
 TE$=“ATTACKATDAWN” 
 AL$=“ABCDEFGHIJKLMNOPQRSTUVWXYZ” 
 CO$=ROTATE$(AL$,13) : REM CESAR CHIFFRE 
@@ -44,13 +44,13 @@ NGGNPXNGQNJA
 
 
 TRANS$( Textstring, Sourcepositionstring, Destpositionstring) 
-'''
+```
 
 Makes transpositions, means changes the position of the characters in a string like its defined in Source and Destination. All three strings have to have the same length of cause and all codes in source have to be in dest also. Else there will result errors. 
 
 Example: 
 
-'''
+```
 TE$=“ATEST” 
 SO$=“12345” 
 DE$=“45213” 
@@ -59,7 +59,7 @@ STTAE
 
 
 FILTER$( String, Filterbyte) 
-'''
+```
 
 Can filter the input from in filterbyte specified attributes, defined like this: 
 
@@ -72,7 +72,7 @@ Can filter the input from in filterbyte specified attributes, defined like this:
 
 Examples: 
 
-'''
+```
 A$=“ABCDEFGHIJKLMNOPQRSTUVWXYZ” 
 PA$=“PASSWORT” 
 ?FILTER$(PA$+A$,$11) 
@@ -90,13 +90,13 @@ theattackwillstartatnoon
 
 
 BLOCK Size (, Perline) 
-'''
+```
 
 Prints out all output ordered in blocks like its common in cryptography. 
 
 
 Example: 
-'''
+```
 BLOCK 5 
 ?“ATTACKATDAWNPREPAREFORHEAVYARTILLERY” 
 ATTAC ATDAW NPREP AREFO HEAVY 
@@ -111,7 +111,7 @@ AREFO
 HEAVY 
 ARTIL 
 LERY 
-'''
+```
 
 There are some other commands that have seen their implementation yet like OLD, REPEAT..UNTIL, like reading hexadecimal or binary numbers. And some commands and functions that lure to be coded like a RENUM, some cryptoanalysis functions, WHILE..WEND, DO..DONE construction, IF..THEN..ELSE..ENDIF and so on. 
 
@@ -132,17 +132,17 @@ ROTATE$( String, Rotation)
 Rotates a String around like for the cesar chiffre. 
 
 Example: 
-'''
+```
 ?ROTATE$(“ABCDEFG”,2) 
 FGABCDE 
 
 SUBST$( Textstring, Alphabetstring, Codestring) 
-'''
+```
 
 Substitutes the chars in the Text with the substitution table from alphabet and codestring just like the rotor of a rotormachine like the enigma. 
 
 Example: 
-'''
+```
 TE$=“ATTACKATDAWN” 
 AL$=“ABCDEFGHIJKLMNOPQRSTUVWXYZ” 
 CO$=ROTATE$(AL$,13) : REM CESAR CHIFFRE 
@@ -151,12 +151,12 @@ NGGNPXNGQNJA
 
 
 TRANS$( Textstring, Sourcepositionstring, Destpositionstring) 
-'''
+```
 
 Makes transpositions, means changes the position of the characters in a string like its defined in Source and Destination. All three strings have to have the same length of cause and all codes in source have to be in dest also. Else there will result errors. 
 
 Example: 
-'''
+```
 TE$=“ATEST” 
 SO$=“12345” 
 DE$=“45213” 
@@ -165,7 +165,7 @@ STTAE
 
 
 FILTER$( String, Filterbyte) 
-'''
+```
 
 Can filter the input from in filterbyte specified attributes, defined like this: 
 
@@ -178,7 +178,7 @@ Can filter the input from in filterbyte specified attributes, defined like this:
 
 Examples: 
 
-'''
+```
 A$=“ABCDEFGHIJKLMNOPQRSTUVWXYZ” 
 PA$=“PASSWORT” 
 ?FILTER$(PA$+A$,$11) 
@@ -196,23 +196,23 @@ theattackwillstartatnoon
 
 
 BLOCK Size (, Perline) 
-'''
+```
 
 Prints out all output ordered in blocks like its common in cryptography. 
 
 
 Example: 
 
-'''
+```
 BLOCK 5 
 ?“ATTACKATDAWNPREPAREFORHEAVYARTILLERY” 
 ATTAC ATDAW NPREP AREFO HEAVY 
 ARTIL LERY 
-'''
+```
 
 Same with BLOCK 5,1 
 
-'''
+```
 ATTAC 
 ATDAW 
 NPREP 
@@ -220,7 +220,7 @@ AREFO
 HEAVY 
 ARTIL 
 LERY 
-'''
+```
 
 There are some other commands that have seen their implementation yet like OLD, REPEAT..UNTIL, like reading hexadecimal or binary numbers. And some commands and functions that lure to be coded like a RENUM, some cryptoanalysis functions, WHILE..WEND, DO..DONE construction, IF..THEN..ELSE..ENDIF and so on. 
 
