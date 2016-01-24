@@ -1,12 +1,12 @@
 #CYPHERBASIC 64#
 
-##compile##
+##loading & compiling##
 
 ```
 LOAD "cypherbasic",8,1:new:sys9*4096
 compile: ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib
-with cc65 compiler/assembler package
 ```
+with cc65 compiler/assembler package
 
 ##description##
 
@@ -63,12 +63,12 @@ FILTER$( String, Filterbyte)
 
 Can filter the input from in filterbyte specified attributes, defined like this: 
 
-[0] lower char 
-[1] numbers 
-[2] space and punctation 
-[3] upper chars 
-[4] strip doubles 
-[5–7] clears bit 5,6,7 
+* [0] lower char 
+* [1] numbers 
+* [2] space and punctation 
+* [3] upper chars 
+* [4] strip doubles 
+* [5–7] clears bit 5,6,7 
 
 Examples: 
 
@@ -127,13 +127,15 @@ The result is this project, still unter development. Its consuming some time to 
 
 There are yet some useful functions in this project, to name some: 
 
+```
 ROTATE$( String, Rotation) 
+```
 
 Rotates a String around like for the cesar chiffre. 
 
 Example: 
 ```
-?ROTATE$(“ABCDEFG”,2) 
+?ROTATE$("ABCDEFG",2) 
 FGABCDE 
 
 SUBST$( Textstring, Alphabetstring, Codestring) 
@@ -230,6 +232,7 @@ I don’t see an upload feature here, so you have to live with that link in the 
 
 I played around with some cryptomachines and had no problems with implementing basic, classic machines, an enigma should be a easy going with this, but I did not do it yet. I won’t take you away the fun.
 
+Take a look at the *.lst files to see the examples in ASCII. Otherwise load the *.prg with your C64 or an emulator.
 
 Have fun! 
 Provide feedback, if you had.
