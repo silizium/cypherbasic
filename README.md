@@ -1,4 +1,6 @@
 #CYPHERBASIC 64#
+![Cypherbasic Image](https://github.com/silizium/cypherbasic/blob/master/cypherbasic.png "Cypherbasic 64")
+
 
 ##loading & compiling##
 
