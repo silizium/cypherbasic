@@ -4,7 +4,7 @@
 ;compile: ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib
 ;with cc65 compiler/assembler package
 ;
-;© 2007 Hanno Behrens (pebbles@schattenlauf.de)
+;© 2007-2017 Hanno Behrens (pebbles@schattenlauf.de)
 ;for http://www.forum64.de/wbb2/thread.php?postid=188445#post188445
 	.setcpu "6502X"
 	.macpack generic
@@ -12,61 +12,60 @@
 	.import SETLFS,SETNAM,OPEN,CLOSE,GET
 	.import BASIN,BSOUT,CHKIN,CKOUT,CLRCH,READST
 
-	.segment "STARTUP"
 	
-	.define VERSION "v0.9"
-	SCREEN=$0400
-	ST=$90
-	k_scrout=$e716
-	pointer=$fb		;+fc
-	uintout=$bdcd		;Basic Positive Integerzahl ausgeben (a/x)
-	K_CHKSTOP=$ffe1		;$f6ed Stop-Taste abfragen eq->stop
-	basic_nmi_vec	= $a002			;Basic NMI-Vector
+	.define VERSION "v0.10"
+SCREEN		=$0400
+ST		=$90
+k_scrout		=$e716
+pointer		=$fb	;+fc
+uintout		=$bdcd	;Basic Positive Integerzahl ausgeben (a/x)
+K_CHKSTOP		=$ffe1	;$f6ed Stop-Taste abfragen eq->stop
+basic_nmi_vec	=$a002	;Basic NMI-Vector
 	
 	; Direct entries
-CLRSCR 		:= $E544
-KBDREAD		:= $E5B4
-NMIEXIT		:= $FEBC
+CLRSCR 		= $E544
+KBDREAD		= $E5B4
+NMIEXIT		= $FEBC
 
 ; ---------------------------------------------------------------------------
 ; Processor Port at $01
 PP		= $01
 
-LORAM		= $01  		; Enable the basic rom
-HIRAM		= $02  		; Enable the kernal rom
-IOEN 		= $04  		; Enable I/O
-CASSTOK_DATA	= $08  		; Cassette data
-CASSPLAY	= $10  		; Cassette: Play
-CASSMOT		= $20  		; Cassette motor on
-TP_FAST		= $80  		; Switch Rossmoeller TurboProcess to fast mode
+LORAM		= $01  	; Enable the basic rom
+HIRAM		= $02  	; Enable the kernal rom
+IOEN 		= $04  	; Enable I/O
+CASSTOK_DATA	= $08  	; Cassette data
+CASSPLAY		= $10  	; Cassette: Play
+CASSMOT		= $20  	; Cassette motor on
+TP_FAST		= $80  	; Switch Rossmoeller TurboProcess to fast mode
 
-RAMONLY		= $F8  		; (~(LORAM | HIRAM | IOEN)) & $FF
+RAMONLY		= $F8  	; (~(LORAM | HIRAM | IOEN)) & $FF
 
 ; BASIC Erweiterungen
 NMIVEK		=$300
-TOKENVEK	=$304
+TOKENVEK		=$304
 LISTVEK		=$306
 CMDVEK		=$308
 FUNVEK		=$30a
-PRINTVEK	=$326
+PRINTVEK		=$326
 
-PRINTORG	=$f1ca
+PRINTORG		=$f1ca
 Z_ACTIVEDEV	=$13
 ADR		=$22
-;STRPTR		=$33		;33/34 Zeiger auf Anfang des Strings
+;STRPTR		=$33	;33/34 Zeiger auf Anfang des Strings
 FAC1		=$61
 FAC2		=$69
 FAC3		=$57
 FAC4		=$5c
-RESSTRPTR	=$33		;nach B_GETSTR
-NEWSTRLEN	=$61		;FAC#1,System
-NEWSTRPTR	=$62
-ARG1STRLEN	=FAC2		;FAC#2, Eigenbenutzung
+RESSTRPTR		=$33	;nach B_GETSTR
+NEWSTRLEN		=$61	;FAC#1,System
+NEWSTRPTR		=$62
+ARG1STRLEN	=FAC2	;FAC#2, Eigenbenutzung
 ARG1STRPTR	=FAC2+1
-ARG2STRLEN	=FAC3		;FAC#3, Eigenbenutzung
+ARG2STRLEN	=FAC3	;FAC#3, Eigenbenutzung
 ARG2STRPTR	=FAC3+1
-TMPSTRLEN	=$5c		;FAC#4,Eigenbenutzung
-TMPSTRPTR	=$5d
+TMPSTRLEN		=$5c	;FAC#4,Eigenbenutzung
+TMPSTRPTR		=$5d
 LINENO		=$39
 CHRGET		=$73
 CHRGOT		=$79
@@ -77,113 +76,113 @@ Z_FNADR		=$bb
 Z_FNLEN		=$b7
 TMPPTR		=$fb
 STACK		=$100
-PRERROR		=$a445		;Fehlerausgabe
-WARMSTART	=$e386
+PRERROR		=$a445	;Fehlerausgabe
+WARMSTART		=$e386
 
 ; BASIC Tokens
-TOK_DATA	=$83
-TOK_INPUT	=$85
+TOK_DATA		=$83
+TOK_INPUT		=$85
 TOK_LET		=$88
 TOK_REM		=$8f
-TOK_PRINT	=$99
+TOK_PRINT		=$99
 TOK_TO		=$a4
 ; Konstanten
 CHAR		=8
 COUNT		=11
-TYPFLAG		=$0d		;0=Numerisch -1=String
+TYPFLAG		=$0d	;0=Numerisch -1=String
 QUOTFLG		=15
 QUOTE		='"'
-FLAG		=$0f		;hochkomma-Flag
+FLAG		=$0f	;hochkomma-Flag
 BUFFER		=$200
 
 ;ICE Befehle
-K_SENDNAM	=$f3d5
+K_SENDNAM		=$f3d5
 K_TALK		=$ffb4
-K_SECTALK	=$ff96
+K_SECTALK		=$ff96
 K_IECIN		=$ffa5
-K_CLSFIL	=$f642
+K_CLSFIL		=$f642
 STATUS		=$90
 
-TABLE		=$a09e		;Tabelle der Befehlsworte
+TABLE		=$a09e	;Tabelle der Befehlsworte
 
-B_TESTSTACK	=$a3fb		;test Platz auf Stack
-B_TESTNUM	=$ad8d		;Testet das Ergebnis auf NUM (Ende einer Func)
-B_TESTSTR	=$ad8f		;Testet das Ergebnis auf STR (Ende einer Func)
-B_FRMNUM	=$ad8a		;numerischen Ausdruck holen
-B_INTER		=$a7ae		;Interpreterschleife
-B_SYNTAX	=$af08		;Syntaxerror
-B_NEXTSTAT	=$a906		;nächstes Statement suchen
+B_TESTSTACK	=$a3fb	;test Platz auf Stack
+B_TESTNUM		=$ad8d	;Testet das Ergebnis auf NUM (Ende einer Func)
+B_TESTSTR		=$ad8f	;Testet das Ergebnis auf STR (Ende einer Func)
+B_FRMNUM		=$ad8a	;numerischen Ausdruck holen
+B_INTER		=$a7ae	;Interpreterschleife
+B_SYNTAX		=$af08	;Syntaxerror
+B_NEXTSTAT	=$a906	;nächstes Statement suchen
 
-K_MEMTOP		=$fe25		;clc->setzen sec->holen x/y
+K_MEMTOP		=$fe25	;clc->setzen sec->holen x/y
 
-B_LNPRT		=$bdcd		;Basic Positive Integerzahl ausgeben (a/x)
+B_LNPRT		=$bdcd	;Basic Positive Integerzahl ausgeben (a/x)
 ;Meldungen ausgeben
-K_SYSMSG		=$e422		;systemmeldung ausgeben
+K_SYSMSG		=$e422	;systemmeldung ausgeben
 B_OVERFLOW	=$b97e
 ERROR		=$a445
-B_ERRORMSG	=$a43a		;Fehlermeldung in X 1..30
+B_ERRORMSG	=$a43a	;Fehlermeldung in X 1..30
 
 B_NMISTART	=$e37b
 B_NMIORGVEK	=$e38b
 
 ;Basic Zeilen einlesen-Spezifisch
-B_INDELLINE	=$a49c		;Löschen oder einfügen von Programmzeilen
-B_ZNRADR	=$a96b		;Zeilennummer in Adressformat umwandeln $14/$15
-B_TOKENLINE	=$a579		;Basic-Zeile in Interpretercode wandeln
-B_FINDLINE	=$a613		;Adresse der Basiczeile berechnen
+B_INDELLINE	=$a49c	;Löschen oder einfügen von Programmzeilen
+B_ZNRADR		=$a96b	;Zeilennummer in Adressformat umwandeln $14/$15
+B_TOKENLINE	=$a579	;Basic-Zeile in Interpretercode wandeln
+B_FINDLINE	=$a613	;Adresse der Basiczeile berechnen
 B_BINDLINES	=$a533
 B_CLR		=$a659
-B_MOVBLOCK	=$a3b8		;Block-Verschiebe-Routine
+B_MOVBLOCK	=$a3b8	;Block-Verschiebe-Routine
 
-B_OUTBYTE	=$a6f3
-B_OLDLIST	=$a6ef
-B_LISTTOK	=$a724
-B_EXECOLD	=$a7ed
+B_OUTBYTE		=$a6f3
+B_OLDLIST		=$a6ef
+B_LISTTOK		=$a724
+B_EXECOLD		=$a7ed
 B_END		=$a831
 B_PRINT		=$aaa0
-B_FRMEVL	=$ad9e		;holt beliebigen Term
-B_HOLEAUSDRUCK	=$ae83		;z.B. STRING danach mit $ad8f prüfen
+B_FRMEVL		=$ad9e	;holt beliebigen Term
+B_HOLEAUSDRUCK	=$ae83	;z.B. STRING danach mit $ad8f prüfen
 B_FUNKTOLD	=$ae8d
-B_GETTERM	=$aef1		;holt einen gesamten Term in Klammern
-B_CHKCLOSE	=$aef7		;Testet auf )
-B_CHKOPEN	=$aefa		;Testet auf (
-B_CHKKOMMA	=$aefd		;Testet auf Komma
-B_CHKCHAR	=$aeff		;Testet auf Zeichen im A
-B_CHKNUM	=$ad8d
-B_CHKSTR	=$ad8f		;prüft ob der letzte geholte Ausdruck ($ae83) ein STR war
-B_STROUT		=$ab1e		;A lo/Y hi pointer
+B_GETTERM		=$aef1	;holt einen gesamten Term in Klammern
+B_CHKCLOSE	=$aef7	;Testet auf )
+B_CHKOPEN		=$aefa	;Testet auf (
+B_CHKKOMMA	=$aefd	;Testet auf Komma
+B_CHKCHAR		=$aeff	;Testet auf Zeichen im A
+B_CHKNUM		=$ad8d
+B_CHKSTR		=$ad8f	;prüft ob der letzte geholte Ausdruck ($ae83) ein STR war
+B_STROUT		=$ab1e	;A lo/Y hi pointer
 B_CHAROUT		=$ab47
-B_GETADR	=$b7f7		;nach $14/$15 Y=lo A=hi
+B_GETADR		=$b7f7	;nach $14/$15 Y=lo A=hi
 
-B_ISCHAR	=$b113		;in A, Result C=1 wenn wahr (a..z)
+B_ISCHAR		=$b113	;in A, Result C=1 wenn wahr (a..z)
 
 B_BYTE2FLOAT	=$b3a2
-B_MKSTR		=$b47d		;len in A, x/y bzw. $62/$63 Adresse, Akku/$61 Länge
+B_MKSTR		=$b47d	;len in A, x/y bzw. $62/$63 Adresse, Akku/$61 Länge
 
-B_RETSTR	=$b4ca		;aus $61/$62/$63 wird der String richtig fertig gemacht
-B_RETBYTEY	=$b3a2		; Yreg zurückgeben
-B_RETBYTEA	=$bc3c		; Akku zurückgeben (Nebeneffekte??)
-B_RETWORD	=$b391		; Y/Akku zurückgeben
-B_RETSTRTMP	=$b487		; Pointer A/Y als temporärern String zurückgeben. Nullbyte oder " ist Ende!
+B_RETSTR		=$b4ca	;aus $61/$62/$63 wird der String richtig fertig gemacht
+B_RETBYTEY	=$b3a2	; Yreg zurückgeben
+B_RETBYTEA	=$bc3c	; Akku zurückgeben (Nebeneffekte??)
+B_RETWORD		=$b391	; Y/Akku zurückgeben
+B_RETSTRTMP	=$b487	; Pointer A/Y als temporärern String zurückgeben. Nullbyte oder " ist Ende!
 
-B_FRESTR	=$b6a3		;Rückgabe: Y/X hi/lo A=len
-				;auch $b6aa? - B_FRMEVL Rückgabe aufbereiten ($22/$23??)$35/36 A=Len
+B_FRESTR		=$b6a3	;Rückgabe: Y/X hi/lo A=len
+			;auch $b6aa? - B_FRMEVL Rückgabe aufbereiten ($22/$23??)$35/36 A=Len
 
-B_GETSTRBYTE	=$b761		;numarg->A, strdesc->$50/$51
-B_GETSTR	=$b782		;Obersten Stringdescripter -> $33/$34 Länge ->A+Y
+B_GETSTRBYTE	=$b761	;numarg->A, strdesc->$50/$51
+B_GETSTR		=$b782	;Obersten Stringdescripter -> $33/$34 Länge ->A+Y
 B_GETSTR_NOCHK  =B_GETSTR+3	;wie oben ohne Stringcheck
-B_GETBYTE	=$b79e		;???
+B_GETBYTE		=$b79e	;???
 
-B_GETKOMMABYTE	=$e200		; Byte ins XReg
-B_GETBYTEX	=$e203		; Byte ins XReg
+B_GETKOMMABYTE	=$e200	; Byte ins XReg
+B_GETBYTEX	=$e203	; Byte ins XReg
 B_GETWORDKOMMABYTE=$b7eb	; Word nach $14/$15, Komma, Byte nach X holen (wie Poke)
-B_GETNUM	=$ad8a		; Irgendwas numerisches in den FAC (siehe oben B_TESTNUM)
+B_GETNUM		=$ad8a	; Irgendwas numerisches in den FAC (siehe oben B_TESTNUM)
 
 K_DIRECTMODE	=$ff90
 ;Rechnen
 B_ADDZIFFER	=$bd7e		; addiert Ziffer zu FAC
 
-K_FINDFN	=$f30f
+K_FINDFN		=$f30f
 
 JUMP		=$54		;JUMP Vector
 
@@ -191,18 +190,21 @@ SEARCHBYTE	=$07
 Z_ACTIVEFN	=$13
 GENPTR		=$14		;CBM Generic Pointer, Integer-Adrese, z.B. Zeilennummer
 STARTBASIC	=$2b
-STARTVAR	=$2d
-STARTARR	=$2f
+STARTVAR		=$2d
+STARTARR		=$2f
 ENDARR		=$31
-STARTSTR	=$33
-BASICEND	=$37
+STARTSTR		=$33
+BASICEND		=$37
 
 STRDESC		=$50		;..$53
 
-.macro  basicstart nr
 
+
+.macro  basicstart nr
 ;Basic Start
+;	.segment "LOADADDR"
 		.word *
+;	.segment "EXEHDR"
 		.org *-2
 		.word :+
 		.ifnblank nr
@@ -210,15 +212,17 @@ STRDESC		=$50		;..$53
 		.else
 		   .word 0
 		.endif
-		.byte $9e		; SYS
+		.byte $9e			; SYS
 		.asciiz .sprintf ("%d", *+7)
 :		.word 0
 .endmacro
-
-;		basicstart 2007
-		.org $9000
-		.word *
-		.org *-2
+;-------------------------------------------------
+;		basicstart 2017
+;	.segment "LOADADDR"
+;		.org $9000
+;		.word *
+	.segment "CODE"
+;		.org *-2
 		
 init:		ldx #<init
 		ldy #>init
@@ -270,7 +274,7 @@ init:		ldx #<init
 		rts
 		
 version:	.byte 13,"cypherbasic 64 ",VERSION,13
-		.asciiz "(c) 2007 h. behrens"
+		.asciiz "(c) 2017 h. behrens"
 msg:		.word version
 .endproc
 
@@ -486,10 +490,10 @@ PNT		=$49
 		jmp B_LISTTOK
 out:		jmp B_OUTBYTE
 		
-newlist:	sub #$cb		;offset abziehen
+newlist:		sub #$cb		;offset abziehen
 		tax
 		sty PNT
-		ldy #-1
+		ldy #256-1
 next:		dex
 		beq found
 loop:		iny
@@ -587,7 +591,7 @@ noerr:		jsr B_FRMNUM
 		jmp B_INTER
 		
 rptende:	txa
-		axs #-5		;add #5; tax
+		axs #256-5		;add #5; tax
 		txs
 		jmp B_INTER
 		
@@ -637,7 +641,7 @@ noerr:		jsr B_FRMNUM
 		jmp B_INTER
 		
 rptende:	txa
-		axs #-5		;add #5; tax
+		axs #256-5		;add #5; tax
 		txs
 		jmp B_INTER
 		
@@ -1133,7 +1137,7 @@ getnext:	jsr CHRGET
 		bcc end
 		cmp #'f'+1
 		bcs end
-		adc #-7		;sub 7 Offset korrigieren, set carry
+		adc #256-7		;sub 7 Offset korrigieren, set carry
 ziffer:		sub #'0'
 		pha
 		lda FAC1
@@ -1252,7 +1256,7 @@ loop:		beq exit
 		
 		ldy ARG2STRLEN		;in Tabelle 2 suchen
 search:		dey
-		cpy #-1
+		cpy #256-1
 		beq notfound
 		cmp (ARG2STRPTR),y
 		bne search
@@ -1264,7 +1268,7 @@ search:		dey
 
 exit:		tsx
 		txa
-		axs #-9		;add #5; tax
+		axs #256-9		;add #5; tax
 		txs
 		jmp B_RETSTR
 		
@@ -1344,7 +1348,7 @@ loop:		beq exit
 		
 		ldy ARG1STRLEN
 search:		dey
-		cpy #-1
+		cpy #256-1
 		beq notfound
 		cmp (ARG1STRPTR),y
 		bne search
@@ -1358,7 +1362,7 @@ notfound:	ldy TMPSTRPTR+2		;restore Index
 
 exit:		tsx
 		txa
-		axs #-9		;add #5; tax
+		axs #256-9		;add #5; tax
 		txs
 		jmp B_RETSTR
 		
@@ -1375,7 +1379,7 @@ error:		ldx #0
 		add NEWSTRLEN
 		sta TMPSTRPTR
 		lda NEWSTRPTR+1
-		adc #-1
+		adc #256-1
 		sta TMPSTRPTR+1
 
 		lda NEWSTRLEN
@@ -1473,7 +1477,7 @@ endl:		pla			;soll reverse aktiviert werden?
 		jsr reverse
 :		tsx
 		txa
-		axs #-3
+		axs #256-3
 		txs
 		jmp B_RETSTR
 		
@@ -1505,7 +1509,7 @@ error:		ldx #3
 		ldy TMPSTRLEN
 		
 loop:		dey
-		cpy #-1
+		cpy #256-1
 		beq endl
 		jsr isfilter
 		bcc loop		;not in filter
@@ -1524,7 +1528,7 @@ endl:		txa			;x->a ist neue Länge
 		ldx NEWSTRLEN
 		ldy TMPSTRLEN
 copy:		dey
-		cpy #-1
+		cpy #256-1
 		beq endcp		;exit unterhalb Schleife
 		jsr isfilter
 		bcc copy		;not in filter
@@ -1539,7 +1543,7 @@ copy:		dey
 
 endcp:		tsx
 		txa
-		axs #-3
+		axs #256-3
 		txs
 		jmp B_RETSTR
 		
@@ -1608,7 +1612,7 @@ exit:
 		pha
 		tsx
 loop:		dey
-		cpy #-1
+		cpy #256-1
 		beq notfound
 		lda SEARCHBYTE		;Bitlöschungen vornehmen
 		eor #%11100000
@@ -1631,7 +1635,7 @@ notfound:	.byte $24		;BIT $xx nächten Befehl überspringen
 		cmp #'0'
 		bcc :+
 		sbc #'9'+1
-		sub #-('9'+1)
+		sub #256-('9'+1)
 :		rts
 .endproc
 
@@ -1644,12 +1648,12 @@ notfound:	.byte $24		;BIT $xx nächten Befehl überspringen
 		cmp #' '
 		bcc :+
 		sbc #'/'+1
-		sub #-('/'+1)
+		sub #256-('/'+1)
 		bcs exit
 :		cmp #':'
 		bcc exit
 		sbc #'@'+1
-		sub #-('@'+1)
+		sub #256-('@'+1)
 exit:		rts
 .endproc
 
@@ -1724,7 +1728,7 @@ endl:		pla			;soll reverse aktiviert werden?
 		jsr reverse
 :		tsx
 		txa
-		axs #-3
+		axs #256-3
 		txs
 		jmp B_RETSTR
 		
@@ -1734,6 +1738,9 @@ error:		ldx #3
 
 
 ;******* END ROTOR$ *************
+
+		.segment "RODATA"
+
 ;**************** TABELLEN ********************
 cmdtab:		.word repeat-1,until-1,while-1,do-1
 		.word notimp-1,notimp-1,ver-1,block-1,ver-1
@@ -1743,14 +1750,14 @@ cmdtab:		.word repeat-1,until-1,while-1,do-1
 funtab:		.word filter, rotate, subst,transpose, rotor
 
 
-CMDSTART	=$CC		;erstes freies Token
+CMDSTART		=$CC		;erstes freies Token
 CMDEND		=CMDSTART+20	;letztes freies Token
-FUNSTART	=CMDEND+1
+FUNSTART		=CMDEND+1
 FUNEND		=$FE
 
-TOK_BLOCK	=$d3
-TOK_TRANS	=$dc
-TOK_SUBST	=$dd
+TOK_BLOCK		=$d3
+TOK_TRANS		=$dc
+TOK_SUBST		=$dd
 TOK_ROTATE	=$e2
 
 newtab:		.byte "repeaT","untiL"	;cc,cd
