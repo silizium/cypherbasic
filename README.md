@@ -116,6 +116,11 @@ ARTIL
 LERY 
 ```
 
+DIRECTORY
+...
+Shows the directory of files, you can abbreviate with diR
+...
+
 There are some other commands that have seen their implementation yet like OLD, REPEAT..UNTIL, like reading hexadecimal or binary numbers. And some commands and functions that lure to be coded like a RENUM, some cryptoanalysis functions, WHILE..WEND, DO..DONE construction, IF..THEN..ELSE..ENDIF and so on. 
 
 But before I throw away much time, I am first looking for any feedback. Latest version can be downloaded from here (search end of thread for latest version) I still did not put it on my website, cause its just in development. 
