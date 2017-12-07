@@ -8,7 +8,6 @@
 ```
 LOAD "cypherbasic",8,1:new:sys9*4096
 compile: make
--ca65 -t c64 cypherbasic.s && ld65 -t c64 -o cypherbasic cypherbasic.o c64.lib-
 ```
 with cc65 compiler/assembler package
 
