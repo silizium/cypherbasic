@@ -117,9 +117,9 @@ LERY
 ```
 
 DIRECTORY
-...
+```
 Shows the directory of files, you can abbreviate with diR
-...
+```
 
 There are some other commands that have seen their implementation yet like OLD, REPEAT..UNTIL, like reading hexadecimal or binary numbers. And some commands and functions that lure to be coded like a RENUM, some cryptoanalysis functions, WHILE..WEND, DO..DONE construction, IF..THEN..ELSE..ENDIF and so on. 
 
